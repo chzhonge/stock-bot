@@ -20,10 +20,6 @@ git@github.com:c224456k/dot-price-bot.git
 
 ```text
 TW_stock.py
-DCbot.py
-botreplie.py
-keep_alive.py
-lunch.py
 tw_stock_chart_bot.py
 ```
 
@@ -82,7 +78,6 @@ requirements.txt
 requests
 yfinance
 discord.py
-google-generativeai
 matplotlib
 beautifulsoup4
 ```
