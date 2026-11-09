@@ -19,13 +19,13 @@ git@github.com:c224456k/dot-price-bot.git
 專案目錄
 
 ```text
-tw_market_report.py      台股快報入口
-tw_stock_chart_bot.py    Discord bot 入口
-stock_bot/              設定、行情、夜盤樣本與繪圖模組
-docs/                   維護與部署說明
-config.example.toml     Bot 設定範例
-pyproject.toml          Python 依賴宣告
-uv.lock                 依賴版本鎖定檔
+tw_stock_chart_bot.py        常駐 Discord bot 入口
+scripts/tw_market_report.py  一次性台股快報
+stock_bot/                   設定、行情、夜盤樣本與繪圖模組
+docs/                        維護與部署說明
+config.example.toml          Bot 設定範例
+pyproject.toml               Python 依賴宣告
+uv.lock                      依賴版本鎖定檔
 ```
 
 ## 更新到 GitHub
@@ -45,7 +45,7 @@ git status
 加入要上傳的檔案，例如:
 
 ```bash
-git add tw_market_report.py
+git add scripts/tw_market_report.py
 ```
 
 建立 commit:
@@ -81,7 +81,7 @@ uv sync --locked
 
 新增依賴時用 `uv add 套件名稱`。更新既有套件時用 `uv lock --upgrade-package 套件名稱`，並提交更新後的 `uv.lock`。
 
-在本機執行台股快報可用 `uv run --locked python tw_market_report.py`。使用下面的 `systemd` 設定時，先執行 `uv sync --locked`，服務會直接使用 `.venv` 裡的 Python。
+在 repo 根目錄執行 `uv run --locked python -m scripts.tw_market_report` 可發送台股快報。使用下面的 `systemd` 設定時，先執行 `uv sync --locked`，服務會直接使用 `.venv` 裡的 Python。
 
 ## Discord 股票圖 Bot
 
