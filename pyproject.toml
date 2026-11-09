@@ -10,3 +10,14 @@ dependencies = [
     "tzdata",
     "yfinance",
 ]
+
+[project.scripts]
+stock-chart-bot = "stock_bot.bot.cli:main"
+tw-market-report = "stock_bot.report.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.16,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "stock_bot"

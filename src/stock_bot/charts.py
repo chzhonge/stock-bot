@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
 
-def build_taiex_chart(session, previous_close):
+def build_taiex_chart(session, previous_close, *, symbol, title):
     """生成較完整的台指盤中走勢圖。"""
     closes = [float(value) for value in session.tolist()]
     if len(closes) < 2:
@@ -60,7 +60,6 @@ def build_taiex_chart(session, previous_close):
         FuncFormatter(lambda value, _: f"{((value - previous_close) / previous_close) * 100:+.2f}%")
     )
 
-    title = "TAIEX Session Trend"
     subtitle = (
         f"{latest_price:,.0f}  "
         f"{change_amount:+.2f} ({change_percent:+.2f}%)  "
@@ -143,7 +142,7 @@ def build_taiex_chart(session, previous_close):
     fig.text(
         0.015,
         0.02,
-        f"Source: Yahoo Finance ^TWII | Updated {timestamps[-1].strftime('%Y-%m-%d %H:%M')}",
+        f"Source: Yahoo Finance {symbol} | Updated {timestamps[-1].strftime('%Y-%m-%d %H:%M')}",
         fontsize=8.5,
         color="#7a8694",
     )
@@ -363,13 +362,7 @@ def build_taifex_night_chart(snapshot):
 
     updated_at = snapshot.get("updated_at")
     updated_text = updated_at.strftime("%Y-%m-%d %H:%M") if updated_at else snapshot["report_date"]
-    source_url = snapshot.get("source_url", "").lower()
-    if "yahoo" in source_url:
-        source_label = "Yahoo WTX&"
-    elif "wantgoo" in source_url:
-        source_label = "WantGoo WTXP&"
-    else:
-        source_label = "TAIFEX TX night market"
+    source_label = "Yahoo WTX&" if snapshot.get("source") == "yahoo" else "TAIFEX TX night market"
     fig.text(0.08, 0.04, f"Source: {source_label} | Updated {updated_text}", fontsize=8.8, color="#94a3b8")
 
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
@@ -445,13 +438,7 @@ def build_taifex_night_candles_chart(snapshot, candles):
 
     updated_at = snapshot.get("updated_at")
     updated_text = updated_at.strftime("%Y-%m-%d %H:%M") if updated_at else snapshot["report_date"]
-    source_url = snapshot.get("source_url", "").lower()
-    if "yahoo" in source_url:
-        source_label = "Yahoo WTX&"
-    elif "wantgoo" in source_url:
-        source_label = "WantGoo WTXP&"
-    else:
-        source_label = "TAIFEX TX night market"
+    source_label = "Yahoo WTX&" if snapshot.get("source") == "yahoo" else "TAIFEX TX night market"
     fig.text(0.07, 0.04, f"Source: {source_label} | Updated {updated_text}", fontsize=8.8, color="#94a3b8")
 
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")

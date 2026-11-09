@@ -9,3 +9,26 @@ query_timeout_seconds = 30
 
 [night]
 sample_file = "data/night-samples.jsonl"
+yahoo_url = "https://tw.stock.yahoo.com/quote/WTX%26"
+taifex_url = "https://www.taifex.com.tw/cht/3/futDailyMarketExcel?commodity_id=TX&marketCode=1"
+aliases = ["夜盤", "台指夜盤", "台指", "tx", "txf", "txf1", "wtxp", "wtxp&"]
+
+[report.discord]
+webhook_url = ""
+mention_user_id = ""
+
+[report.index]
+symbol = "^TWII"
+label = "台指 (預估)"
+chart_title = "TAIEX Session Trend"
+
+[report.sources]
+quote_url = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp"
+sentiment_url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+sentiment_referer = "https://edition.cnn.com/"
+calendar_url = "https://api.pin-yi.me/taiwan-calendar"
+
+[[report.quotes]]
+symbol = "00675L"
+label = "富邦正2"
+exchange = "tse"

@@ -19,11 +19,15 @@ git@github.com:c224456k/dot-price-bot.git
 專案目錄
 
 ```text
-tw_stock_chart_bot.py        常駐 Discord bot 入口
-scripts/tw_market_report.py  一次性台股快報
-stock_bot/                   設定、行情、夜盤樣本與繪圖模組
+src/stock_bot/bot/           常駐 bot 的入口、Discord 事件、Service 和 Repository
+src/stock_bot/report/        快報的入口、Service、Repository 和 webhook 發送
+src/stock_bot/market/        共用 Yahoo 取價、夜盤查詢與樣本存取
+src/stock_bot/config.py      共用 TOML 設定與驗證
+src/stock_bot/charts.py      共用 Matplotlib 繪圖
+tw_stock_chart_bot.py        常駐 bot 的原啟動入口
+scripts/tw_market_report.py  一次性快報的原啟動入口
 docs/                        維護與部署說明
-config.example.toml          Bot 設定範例
+config.example.toml          Bot 與市場快報的共用設定範例
 pyproject.toml               Python 依賴宣告
 uv.lock                      依賴版本鎖定檔
 ```
@@ -81,7 +85,20 @@ uv sync --locked
 
 新增依賴時用 `uv add 套件名稱`。更新既有套件時用 `uv lock --upgrade-package 套件名稱`，並提交更新後的 `uv.lock`。
 
-在 repo 根目錄執行 `uv run --locked python -m scripts.tw_market_report` 可發送台股快報。使用下面的 `systemd` 設定時，先執行 `uv sync --locked`，服務會直接使用 `.venv` 裡的 Python。
+使用下面的 `systemd` 設定時，先執行 `uv sync --locked`，服務會直接使用 `.venv` 裡的 Python。
+
+## 一次性台股快報
+
+複製 `config.example.toml` 為 `config.toml`，在 `[report.discord]` 填入快報 webhook。常駐 bot 和快報共用這個檔案，各自驗證用到的區段。正式設定檔應限制讀取權限，並保存在 Git 之外。
+
+- `[report.discord]` 設定發送目的地與可選的通知對象。
+- `[report.index]` 設定 Yahoo Finance 指數代碼、快報名稱和圖表標題。
+- `[[report.quotes]]` 可重複列出要查詢的台股或 ETF，`exchange` 用 `tse` 或 `otc`。
+- `[report.sources]` 設定證交所、CNN 與台灣行事曆的網址。Yahoo Finance 連線由 `yfinance` 管理。
+
+```bash
+uv run --locked tw-market-report --config config.toml
+```
 
 ## Discord 股票圖 Bot
 
@@ -109,10 +126,10 @@ tw_stock_chart_bot.py
 - 美股代碼，例如 `AAPL`、`TSLA`、`VOO`、`BRK.B`
 - Bot 在 Discord 伺服器內會嘗試把暱稱改成 `股市小幫手`
 
-先複製 `config.example.toml` 為 `config.toml`，填入 `[discord]` 的 `token`。正式設定檔應限制讀取權限，並保存在 Git 之外。
+在共用的 `config.toml` 填入 `[discord]` 的 `token`。`[night]` 設定夜盤網址、查詢別名與樣本檔路徑。既有設定檔可參照範例補上 `yahoo_url`、`taifex_url` 和 `aliases`。
 
 ```bash
-uv run --locked python tw_stock_chart_bot.py --config config.toml
+uv run --locked stock-chart-bot --config config.toml
 ```
 
 Bot 會依序處理取價。預設允許 4 筆等待，滿了就立即回覆忙碌。排隊和取價共用 30 秒期限，取價完成後才開始繪圖。

@@ -7,8 +7,6 @@ from bs4 import BeautifulSoup
 import requests
 
 
-TAIFEX_NIGHT_TX_URL = "https://www.taifex.com.tw/cht/3/futDailyMarketExcel?commodity_id=TX&marketCode=1"
-YAHOO_NIGHT_TX_URL = "https://tw.stock.yahoo.com/quote/WTX%26"
 TAIWAN_TZ = ZoneInfo("Asia/Taipei")
 HTTP_HEADERS = {
     "User-Agent": (
@@ -19,13 +17,8 @@ HTTP_HEADERS = {
     "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
 }
 
-def is_night_session_query(user_input):
-    text = user_input.strip().lower()
-    return text in {"夜盤", "台指夜盤", "台指", "tx", "txf", "txf1", "wtxp", "wtxp&"}
-
-
-def fetch_taifex_night_snapshot(timeout=20):
-    response = requests.get(TAIFEX_NIGHT_TX_URL, timeout=timeout, headers=HTTP_HEADERS)
+def fetch_taifex_night_snapshot(url, timeout):
+    response = requests.get(url, timeout=timeout, headers=HTTP_HEADERS)
     response.raise_for_status()
     soup = BeautifulSoup(response.text, "html.parser")
 
@@ -74,8 +67,8 @@ def fetch_taifex_night_snapshot(timeout=20):
     }
 
 
-def fetch_yahoo_night_snapshot(timeout=20):
-    response = requests.get(YAHOO_NIGHT_TX_URL, timeout=timeout, headers=HTTP_HEADERS)
+def fetch_yahoo_night_snapshot(url, timeout):
+    response = requests.get(url, timeout=timeout, headers=HTTP_HEADERS)
     response.raise_for_status()
     text = BeautifulSoup(response.text, "html.parser").get_text("\n", strip=True)
 
@@ -115,20 +108,20 @@ def fetch_yahoo_night_snapshot(timeout=20):
         "open_interest": extract(r"未平倉\s+([0-9,]+)", "open interest", parse_number, required=False),
         "best_bid": extract(r"買價\s+([0-9,]+(?:\.[0-9]+)?)", "best bid", parse_number, required=False),
         "best_ask": extract(r"賣價\s+([0-9,]+(?:\.[0-9]+)?)", "best ask", parse_number, required=False),
-        "source_url": YAHOO_NIGHT_TX_URL,
+        "source": "yahoo",
         "updated_at": timestamp,
         "previous_close": extract(r"昨收\s+([0-9,]+(?:\.[0-9]+)?)", "previous close", parse_number),
         "average_price": None,
     }
 
 
-def fetch_night_snapshot(timeout=20):
+def fetch_night_snapshot(yahoo_url, taifex_url, timeout):
     try:
-        return fetch_yahoo_night_snapshot(timeout)
+        return fetch_yahoo_night_snapshot(yahoo_url, timeout)
     except Exception as yahoo_exc:
         print(f"Yahoo 夜盤抓取失敗，改用期交所: {yahoo_exc}")
-        snapshot = fetch_taifex_night_snapshot(timeout)
-        snapshot["source_url"] = TAIFEX_NIGHT_TX_URL
+        snapshot = fetch_taifex_night_snapshot(taifex_url, timeout)
+        snapshot["source"] = "taifex"
         snapshot["updated_at"] = datetime.datetime.now(TAIWAN_TZ)
         return snapshot
 
