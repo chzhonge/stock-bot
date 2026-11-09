@@ -1,4 +1,4 @@
-# GitHub Python Files Notes
+# 股票工具維護手冊
 
 這份文件專門記錄 GitHub 上 Python 檔案的常用操作。
 
@@ -19,7 +19,7 @@ git@github.com:c224456k/dot-price-bot.git
 專案目錄
 
 ```text
-TW_stock.py              台股快報入口
+tw_market_report.py      台股快報入口
 tw_stock_chart_bot.py    Discord bot 入口
 stock_bot/              設定、行情、夜盤樣本與繪圖模組
 docs/                   維護與部署說明
@@ -45,7 +45,7 @@ git status
 加入要上傳的檔案，例如:
 
 ```bash
-git add TW_stock.py
+git add tw_market_report.py
 ```
 
 建立 commit:
@@ -81,7 +81,7 @@ uv sync --locked
 
 新增依賴時用 `uv add 套件名稱`。更新既有套件時用 `uv lock --upgrade-package 套件名稱`，並提交更新後的 `uv.lock`。
 
-在本機執行台股快報可用 `uv run --locked python TW_stock.py`。使用下面的 `systemd` 設定時，先執行 `uv sync --locked`，服務會直接使用 `.venv` 裡的 Python。
+在本機執行台股快報可用 `uv run --locked python tw_market_report.py`。使用下面的 `systemd` 設定時，先執行 `uv sync --locked`，服務會直接使用 `.venv` 裡的 Python。
 
 ## Discord 股票圖 Bot
 
@@ -276,17 +276,3 @@ __pycache__/
 不要把密碼、token、Discord webhook、API key 直接寫進公開 repo。
 
 如果有新增機密資料，建議改用環境變數或 GitHub Secrets。
-
-## 檔名提醒
-
-固定使用:
-
-```text
-TW_stock.py
-```
-
-不要再使用之前拼錯的:
-
-```text
-TW-sotck.py
-```
