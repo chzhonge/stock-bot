@@ -20,12 +20,12 @@ git@github.com:c224456k/dot-price-bot.git
 
 ```text
 src/stock_bot/bot/           常駐 bot 的入口、Discord 事件、Service 和 Repository
-src/stock_bot/report/        快報的入口、Service、Repository 和 webhook 發送
+src/stock_bot/report/        快報的 Service、Repository 和 webhook 發送
 src/stock_bot/market/        共用 Yahoo 取價、夜盤查詢與樣本存取
 src/stock_bot/config.py      共用 TOML 設定與驗證
 src/stock_bot/charts.py      共用 Matplotlib 繪圖
 tw_stock_chart_bot.py        常駐 bot 的原啟動入口
-scripts/tw_market_report.py  一次性快報的原啟動入口
+scripts/tw_market_report.py  一次性快報的組裝與啟動入口
 docs/                        維護與部署說明
 config.example.toml          Bot 與市場快報的共用設定範例
 pyproject.toml               Python 依賴宣告
@@ -93,11 +93,12 @@ uv sync --locked
 
 - `[report.discord]` 設定發送目的地與可選的通知對象。
 - `[report.index]` 設定 Yahoo Finance 指數代碼、快報名稱和圖表標題。
-- `[[report.quotes]]` 可重複列出要查詢的台股或 ETF，`exchange` 用 `tse` 或 `otc`。
 - `[report.sources]` 設定證交所、CNN 與台灣行事曆的網址。Yahoo Finance 連線由 `yfinance` 管理。
 
+快報的股票和 ETF 清單定義在 `scripts/tw_market_report.py` 的 `WATCHLIST`。上市標的用 `tse`，上櫃標的用 `otc`。若原設定檔含 `[[report.quotes]]` 或 `[[report.watchlist]]`，先把自訂標的搬到 `WATCHLIST`，再移除舊區段。
+
 ```bash
-uv run --locked tw-market-report --config config.toml
+uv run --locked python -m scripts.tw_market_report --config config.toml
 ```
 
 ## Discord 股票圖 Bot

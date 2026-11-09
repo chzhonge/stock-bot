@@ -27,8 +27,3 @@ quote_url = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp"
 sentiment_url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
 sentiment_referer = "https://edition.cnn.com/"
 calendar_url = "https://api.pin-yi.me/taiwan-calendar"
-
-[[report.quotes]]
-symbol = "00675L"
-label = "富邦正2"
-exchange = "tse"

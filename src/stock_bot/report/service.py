@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 
 from stock_bot.charts import build_taiex_chart
 
@@ -7,31 +8,41 @@ logger = logging.getLogger(__name__)
 CHART_FILENAME = "market_intraday.png"
 
 
+@dataclass(frozen=True)
+class WatchlistEntry:
+    symbol: str
+    label: str
+    exchange: str
+
+
 class MarketReportService:
     def __init__(self, repository, notifier):
         self.repository = repository
         self.notifier = notifier
 
-    def run(self, config, day):
+    def run(self, *, day, index_symbol, index_label, chart_title, watchlist: tuple[WatchlistEntry, ...], mention_user_id):
+        if len(watchlist) > 23:
+            raise ValueError("快報最多可列出 23 檔股票")
+
         try:
             if not self.repository.is_workday(day):
                 return False
         except Exception:
             logger.warning("無法確認台灣上班日，依預設繼續發送")
 
-        index = self.repository.fetch_index(config.index_symbol)
+        index = self.repository.fetch_index(index_symbol)
         fields = [{
-            "name": f"📉 {config.index_label}",
+            "name": f"📉 {index_label}",
             "value": (
                 f"**{index['current_price']:,.0f}** "
                 f"({index['change_amount']:+.2f} / {index['change_percent']:+.2f}%)"
             ),
             "inline": True,
         }]
-        for quote in config.quotes:
-            price, change, percent = self.repository.fetch_quote(quote.symbol, quote.exchange)
+        for item in watchlist:
+            price, change, percent = self.repository.fetch_quote(item.symbol, item.exchange)
             fields.append({
-                "name": f"📈 {quote.label} ({quote.symbol})",
+                "name": f"📈 {item.label} ({item.symbol})",
                 "value": f"**{price:.2f}** ({change:+.2f} / {percent:+.2f}%)",
                 "inline": True,
             })
@@ -42,13 +53,12 @@ class MarketReportService:
             "value": "市場情緒同步中",
             "inline": False,
         })
-        mention = config.mention_user_id
-        content = f"<@{mention}> 📈 實時行情報告" if mention else "📈 實時行情報告"
+        content = f"<@{mention_user_id}> 📈 實時行情報告" if mention_user_id else "📈 實時行情報告"
         payload = {
             "content": content,
-            "allowed_mentions": {"parse": [], "users": [mention] if mention else []},
+            "allowed_mentions": {"parse": [], "users": [mention_user_id] if mention_user_id else []},
             "embeds": [{
-                "title": f"{config.index_label}走勢圖",
+                "title": f"{index_label}走勢圖",
                 "color": 3066993 if index["change_amount"] >= 0 else 15158332,
                 "image": {"url": f"attachment://{CHART_FILENAME}"},
                 "fields": fields,
@@ -57,8 +67,8 @@ class MarketReportService:
         chart = build_taiex_chart(
             index["session"],
             index["previous_close"],
-            symbol=config.index_symbol,
-            title=config.chart_title,
+            symbol=index_symbol,
+            title=chart_title,
         )
         self.notifier.send(payload, chart, CHART_FILENAME)
         return True

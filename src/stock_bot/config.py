@@ -108,13 +108,6 @@ def load_config(path: Path) -> BotConfig:
 
 
 @dataclass(frozen=True)
-class ReportQuote:
-    symbol: str
-    label: str
-    exchange: str
-
-
-@dataclass(frozen=True)
 class ReportSources:
     quote_url: str
     sentiment_url: str
@@ -129,7 +122,6 @@ class ReportConfig:
     index_symbol: str
     index_label: str
     chart_title: str
-    quotes: tuple[ReportQuote, ...]
     sources: ReportSources
 
 
@@ -137,7 +129,8 @@ def load_report_config(path: Path) -> ReportConfig:
     config = read_toml(path).get("report")
     if not isinstance(config, dict):
         raise ValueError("設定檔缺少 [report] 區段")
-    quotes = config.pop("quotes", [])
+    if "watchlist" in config or "quotes" in config:
+        raise ValueError("請將舊快報股票清單移到 scripts/tw_market_report.py 的 WATCHLIST，再移除設定檔中的清單")
     validate_sections(config, {
         "discord": {"webhook_url", "mention_user_id"},
         "index": {"symbol", "label", "chart_title"},
@@ -163,22 +156,6 @@ def load_report_config(path: Path) -> ReportConfig:
     index_label = required_text(index, "label", "index")
     chart_title = required_text(index, "chart_title", "index")
 
-    if not isinstance(quotes, list) or len(quotes) > 23:
-        raise ValueError("quotes 必須是最多 23 筆的標的清單")
-    report_quotes = []
-    for number, quote in enumerate(quotes, 1):
-        prefix = f"quotes[{number}]"
-        if not isinstance(quote, dict) or quote.keys() - {"symbol", "label", "exchange"}:
-            raise ValueError(f"{prefix} 含有無效欄位")
-        symbol = required_text(quote, "symbol", prefix)
-        label = required_text(quote, "label", prefix)
-        exchange = required_text(quote, "exchange", prefix)
-        if exchange not in {"tse", "otc"}:
-            raise ValueError(f"{prefix}.exchange 必須是 tse 或 otc")
-        if not re.fullmatch(r"[0-9]{4,6}[A-Z]?", symbol):
-            raise ValueError(f"{prefix}.symbol 必須是台股代碼")
-        report_quotes.append(ReportQuote(symbol, label, exchange))
-
     sources = config.get("sources", {})
 
     return ReportConfig(
@@ -187,7 +164,6 @@ def load_report_config(path: Path) -> ReportConfig:
         index_symbol=index_symbol,
         index_label=index_label,
         chart_title=chart_title,
-        quotes=tuple(report_quotes),
         sources=ReportSources(
             quote_url=required_url(sources, "quote_url", "sources"),
             sentiment_url=required_url(sources, "sentiment_url", "sources"),
