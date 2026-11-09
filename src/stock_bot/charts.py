@@ -1,10 +1,16 @@
 import datetime
-import tempfile
+from io import BytesIO
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
+
+
+def figure_png(figure):
+    FigureCanvasAgg(figure)
+    with BytesIO() as buffer:
+        figure.savefig(buffer, format="png", bbox_inches="tight", facecolor=figure.get_facecolor())
+        return buffer.getvalue()
 
 
 def build_taiex_chart(session, previous_close, *, symbol, title):
@@ -23,7 +29,7 @@ def build_taiex_chart(session, previous_close, *, symbol, title):
     line_color = "#d64045" if change_amount < 0 else "#138a5c"
     fill_color = "#f6d9dc" if change_amount < 0 else "#d7f0e4"
 
-    fig = plt.figure(figsize=(12.6, 7.2), dpi=160, facecolor="#f3f6fb")
+    fig = Figure(figsize=(12.6, 7.2), dpi=160, facecolor="#f3f6fb")
     ax = fig.add_axes([0.07, 0.14, 0.88, 0.68])
     ax.set_facecolor("#ffffff")
 
@@ -147,11 +153,7 @@ def build_taiex_chart(session, previous_close, *, symbol, title):
         color="#7a8694",
     )
 
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-    temp_file.close()
-    fig.savefig(temp_file.name, bbox_inches="tight", facecolor=fig.get_facecolor())
-    plt.close(fig)
-    return temp_file.name
+    return figure_png(fig)
 
 def build_stock_chart(snapshot):
     session = snapshot["session"]
@@ -164,7 +166,7 @@ def build_stock_chart(snapshot):
     line_color = "#d64045" if change_amount < 0 else "#138a5c"
     fill_color = "#f6d9dc" if change_amount < 0 else "#d7f0e4"
 
-    fig = plt.figure(figsize=(12.6, 7.2), dpi=160, facecolor="#f3f6fb")
+    fig = Figure(figsize=(12.6, 7.2), dpi=160, facecolor="#f3f6fb")
     ax = fig.add_axes([0.07, 0.14, 0.88, 0.68])
     ax.set_facecolor("#ffffff")
 
@@ -290,11 +292,7 @@ def build_stock_chart(snapshot):
         color="#7a8694",
     )
 
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-    temp_file.close()
-    fig.savefig(temp_file.name, bbox_inches="tight", facecolor=fig.get_facecolor())
-    plt.close(fig)
-    return temp_file.name
+    return figure_png(fig)
 
 
 def build_taifex_night_chart(snapshot):
@@ -307,7 +305,7 @@ def build_taifex_night_chart(snapshot):
     color = "#d64045" if change_amount < 0 else "#138a5c"
     fill_color = "#f6d9dc" if change_amount < 0 else "#d7f0e4"
 
-    fig = plt.figure(figsize=(10.8, 6.6), dpi=160, facecolor="#0f1720")
+    fig = Figure(figsize=(10.8, 6.6), dpi=160, facecolor="#0f1720")
     ax = fig.add_axes([0.08, 0.16, 0.48, 0.68])
     ax.set_facecolor("#15202b")
 
@@ -365,17 +363,13 @@ def build_taifex_night_chart(snapshot):
     source_label = "Yahoo WTX&" if snapshot.get("source") == "yahoo" else "TAIFEX TX night market"
     fig.text(0.08, 0.04, f"Source: {source_label} | Updated {updated_text}", fontsize=8.8, color="#94a3b8")
 
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-    temp_file.close()
-    fig.savefig(temp_file.name, bbox_inches="tight", facecolor=fig.get_facecolor())
-    plt.close(fig)
-    return temp_file.name
+    return figure_png(fig)
 
 
 def build_taifex_night_candles_chart(snapshot, candles):
     change_amount = snapshot["change_amount"] or 0.0
     change_percent = snapshot["change_percent"] or 0.0
-    fig = plt.figure(figsize=(12.8, 7.0), dpi=160, facecolor="#0f1720")
+    fig = Figure(figsize=(12.8, 7.0), dpi=160, facecolor="#0f1720")
     ax = fig.add_axes([0.07, 0.18, 0.88, 0.64])
     ax.set_facecolor("#15202b")
 
@@ -441,8 +435,4 @@ def build_taifex_night_candles_chart(snapshot, candles):
     source_label = "Yahoo WTX&" if snapshot.get("source") == "yahoo" else "TAIFEX TX night market"
     fig.text(0.07, 0.04, f"Source: {source_label} | Updated {updated_text}", fontsize=8.8, color="#94a3b8")
 
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-    temp_file.close()
-    fig.savefig(temp_file.name, bbox_inches="tight", facecolor=fig.get_facecolor())
-    plt.close(fig)
-    return temp_file.name
+    return figure_png(fig)

@@ -1,6 +1,9 @@
 import datetime
 import json
+import os
 import re
+import tempfile
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
@@ -153,13 +156,33 @@ def load_recent_night_samples(sample_file):
             try:
                 item = json.loads(line)
                 item["dt"] = datetime.datetime.fromisoformat(item["ts"])
-            except Exception:
+            except (KeyError, TypeError, ValueError):
                 continue
-            if item["dt"] >= cutoff and item.get("last_price") is not None:
+            if item["dt"].utcoffset() is not None and item["dt"] >= cutoff and item.get("last_price") is not None:
                 samples.append(item)
 
     samples.sort(key=lambda item: item["dt"])
     return samples
+
+
+def prune_night_samples(sample_file):
+    if not sample_file.exists():
+        return
+
+    samples = load_recent_night_samples(sample_file)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=sample_file.parent, prefix=".night-samples-", delete=False
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
+            for sample in samples:
+                sample.pop("dt")
+                temp_file.write(json.dumps(sample, ensure_ascii=True) + "\n")
+        os.replace(temp_path, sample_file)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
 
 def build_night_candles(samples, minutes=5):

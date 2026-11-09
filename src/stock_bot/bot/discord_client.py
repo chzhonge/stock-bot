@@ -62,11 +62,13 @@ class StockChartBot(discord.Client):
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self.query_timeout_seconds
         try:
-            result = self.service.enqueue(user_input, deadline)
+            with self.service.reserve_query():
+                result = self.service.enqueue(user_input, deadline)
+                await self.handle_query(message, result, deadline)
         except asyncio.QueueFull:
             await message.reply("目前查詢較多，請稍後再試。", mention_author=False)
-            return
 
+    async def handle_query(self, message, result, deadline):
         try:
             async with message.channel.typing():
                 async with asyncio.timeout_at(deadline):
@@ -112,8 +114,9 @@ class StockChartBot(discord.Client):
             embed.set_footer(text=f"資料來源 Yahoo Finance | 代碼 {snapshot['symbol']}")
         embed.set_image(url=f"attachment://{file_name}")
 
-        await message.reply(
-            embed=embed,
-            file=discord.File(io.BytesIO(image), filename=file_name),
-            mention_author=False,
-        )
+        with io.BytesIO(image) as buffer:
+            attachment = discord.File(buffer, filename=file_name)
+            try:
+                await message.reply(embed=embed, file=attachment, mention_author=False)
+            finally:
+                attachment.close()

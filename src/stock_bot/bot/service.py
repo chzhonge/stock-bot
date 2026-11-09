@@ -1,5 +1,5 @@
 import asyncio
-from pathlib import Path
+from contextlib import contextmanager
 
 from yfinance.exceptions import YFRateLimitError
 
@@ -15,9 +15,21 @@ class StockChartService:
         self.repository = repository
         self.night_aliases = night_aliases
         self.quote_queue = asyncio.Queue(maxsize=queue_size)
+        self.max_in_flight = queue_size + 1
+        self.in_flight = 0
         self.quote_worker = None
         self.night_lock = asyncio.Lock()
         self.chart_lock = asyncio.Lock()
+
+    @contextmanager
+    def reserve_query(self):
+        if self.in_flight >= self.max_in_flight:
+            raise asyncio.QueueFull
+        self.in_flight += 1
+        try:
+            yield
+        finally:
+            self.in_flight -= 1
 
     def enqueue(self, user_input, deadline):
         result = asyncio.get_running_loop().create_future()
@@ -80,14 +92,7 @@ class StockChartService:
 
 def render_chart(reply_type, snapshot, candles):
     if reply_type == "stock":
-        image_path = build_stock_chart(snapshot)
-    elif len(candles) >= 2:
-        image_path = build_taifex_night_candles_chart(snapshot, candles)
-    else:
-        image_path = build_taifex_night_chart(snapshot)
-
-    path = Path(image_path)
-    try:
-        return path.read_bytes()
-    finally:
-        path.unlink(missing_ok=True)
+        return build_stock_chart(snapshot)
+    if len(candles) >= 2:
+        return build_taifex_night_candles_chart(snapshot, candles)
+    return build_taifex_night_chart(snapshot)

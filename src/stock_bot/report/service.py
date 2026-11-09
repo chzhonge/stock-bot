@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 
 from stock_bot.charts import build_taiex_chart
 
@@ -55,14 +54,11 @@ class MarketReportService:
                 "fields": fields,
             }],
         }
-        chart_path = Path(build_taiex_chart(
+        chart = build_taiex_chart(
             index["session"],
             index["previous_close"],
             symbol=config.index_symbol,
             title=config.chart_title,
-        ))
-        try:
-            self.notifier.send(payload, chart_path, CHART_FILENAME)
-        finally:
-            chart_path.unlink(missing_ok=True)
+        )
+        self.notifier.send(payload, chart, CHART_FILENAME)
         return True

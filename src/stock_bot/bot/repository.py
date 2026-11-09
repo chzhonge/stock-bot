@@ -1,7 +1,10 @@
+import time
+
 from stock_bot.market.quotes import fetch_stock_snapshot
 from stock_bot.market.night import (
     fetch_night_snapshot,
     load_recent_night_samples,
+    prune_night_samples,
     record_night_sample,
 )
 
@@ -12,11 +15,16 @@ class StockChartRepository:
         self.yahoo_url = yahoo_url
         self.taifex_url = taifex_url
         self.timeout = timeout
+        self.next_prune_at = 0.0
 
     def fetch_stock(self, symbol):
         return fetch_stock_snapshot(symbol, self.timeout)
 
     def collect_night_quote(self, include_candles):
+        now = time.monotonic()
+        if now >= self.next_prune_at:
+            prune_night_samples(self.sample_file)
+            self.next_prune_at = now + 3600
         snapshot = fetch_night_snapshot(self.yahoo_url, self.taifex_url, self.timeout)
         record_night_sample(snapshot, self.sample_file)
         if not include_candles:
