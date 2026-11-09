@@ -16,11 +16,16 @@ git@github.com:c224456k/dot-price-bot.git
 /home/twnoc/liaob/DClab
 ```
 
-主要 Python 檔案:
+專案目錄
 
 ```text
-TW_stock.py
-tw_stock_chart_bot.py
+TW_stock.py              台股快報入口
+tw_stock_chart_bot.py    Discord bot 入口
+stock_bot/              設定、行情、夜盤樣本與繪圖模組
+docs/                   維護與部署說明
+config.example.toml     Bot 設定範例
+pyproject.toml          Python 依賴宣告
+uv.lock                 依賴版本鎖定檔
 ```
 
 ## 更新到 GitHub
@@ -66,35 +71,17 @@ git pull
 
 ## 套件管理
 
-Python 套件寫在:
+專案使用 uv 管理套件。`pyproject.toml` 宣告依賴，`uv.lock` 鎖定安裝版本，`.python-version` 指定預設使用 Python 3.11。
 
-```text
-requirements.txt
-```
-
-目前常用套件:
-
-```text
-requests
-yfinance
-discord.py
-matplotlib
-beautifulsoup4
-```
-
-如果換新機器或環境，要先安裝:
+安裝 uv 後，在 repo 根目錄建立或更新 `.venv`：
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-python -m pip install beautifulsoup4
+uv sync --locked
 ```
 
-補充:
+新增依賴時用 `uv add 套件名稱`。更新既有套件時用 `uv lock --upgrade-package 套件名稱`，並提交更新後的 `uv.lock`。
 
-- Debian / Ubuntu 新機器如果直接用 `python3 -m pip install ...` 可能會遇到 `externally-managed-environment`
-- 這種情況改用 `.venv` 最穩定
+在本機執行台股快報可用 `uv run --locked python TW_stock.py`。使用下面的 `systemd` 設定時，先執行 `uv sync --locked`，服務會直接使用 `.venv` 裡的 Python。
 
 ## Discord 股票圖 Bot
 
@@ -122,13 +109,15 @@ tw_stock_chart_bot.py
 - 美股代碼，例如 `AAPL`、`TSLA`、`VOO`、`BRK.B`
 - Bot 在 Discord 伺服器內會嘗試把暱稱改成 `股市小幫手`
 
-啟動方式:
+先複製 `config.example.toml` 為 `config.toml`，填入 `[discord]` 的 `token`。正式設定檔應限制讀取權限，並保存在 Git 之外。
 
 ```bash
-source .venv/bin/activate
-export DISCORD_TOKEN='你的 Discord Bot Token'
-python tw_stock_chart_bot.py
+uv run --locked python tw_stock_chart_bot.py --config config.toml
 ```
+
+Bot 會依序處理取價。預設允許 4 筆等待，滿了就立即回覆忙碌。排隊和取價共用 30 秒期限，取價完成後才開始繪圖。
+
+若用 Docker 部署，將正式設定檔以唯讀方式掛載，並把 `night.sample_file` 設為掛載資料卷內的路徑，例如 `/data/night-samples.jsonl`。
 
 注意:
 
@@ -156,10 +145,10 @@ python tw_stock_chart_bot.py
 - 如果 Yahoo 該次抓取失敗，fallback 回期交所官方 TX 夜盤資料
 - 若樣本不足，先回單根夜盤摘要 K 棒
 - bot 在線時，會每分鐘抓一次夜盤最新價
-- 本地暫存檔:
+- 樣本存到 `night.sample_file`。範例路徑相對於設定檔所在的目錄。
 
 ```text
-/tmp/taifex_tx_night_samples.jsonl
+data/night-samples.jsonl
 ```
 
 - 再將累積樣本聚成 5 分 K 棒圖
@@ -169,12 +158,12 @@ python tw_stock_chart_bot.py
 - Yahoo `WTX&` 目前可穩定抓到當下摘要欄位，例如成交、漲跌、開高低、昨收
 - 但沒有直接抓到可用的完整夜盤分時序列 API
 - 所以夜盤走勢圖仍然主要依賴 bot 本地每分鐘累積樣本
-- bot 剛重啟後，夜盤圖會先比較短，跑久一點後才會變完整
+- 重新啟動時會讀取仍在有效時間內的樣本。更換路徑時，可先把舊樣本檔搬到新位置。
 
 限制:
 
 - 不是直接抓到整晚完整歷史分 K API
-- 所以 bot 剛啟動時，夜盤圖可能只有 1 根或少數幾根
+- 樣本不足時，夜盤圖可能只有 1 根或少數幾根
 - 跑越久，夜盤 5 分 K 圖會越完整
 
 如果未來要更完整的夜盤多根 K:
@@ -219,8 +208,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/home/twnoc/liaob/DClab
-Environment=DISCORD_TOKEN=你的新DiscordBotToken
-ExecStart=/home/twnoc/liaob/DClab/.venv/bin/python /home/twnoc/liaob/DClab/tw_stock_chart_bot.py
+ExecStart=/home/twnoc/liaob/DClab/.venv/bin/python /home/twnoc/liaob/DClab/tw_stock_chart_bot.py --config /home/twnoc/liaob/DClab/config.toml
 Restart=always
 RestartSec=5
 StandardOutput=append:/home/twnoc/liaob/DClab/tw_stock_chart_bot.log
@@ -242,8 +230,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/home/twnoc/liaob/DClab
-Environment=DISCORD_TOKEN=你的新DiscordBotToken
-ExecStart=/home/twnoc/liaob/DClab/.venv/bin/python /home/twnoc/liaob/DClab/tw_stock_chart_bot.py
+ExecStart=/home/twnoc/liaob/DClab/.venv/bin/python /home/twnoc/liaob/DClab/tw_stock_chart_bot.py --config /home/twnoc/liaob/DClab/config.toml
 Restart=always
 RestartSec=5
 StandardOutput=append:/home/twnoc/liaob/DClab/tw_stock_chart_bot.log
@@ -275,7 +262,7 @@ sed -n '1,120p' /home/twnoc/liaob/DClab/tw_stock_chart_bot.log
 
 - Discord bot token 不建議直接寫死或公開
 - 如果 token 有外洩，請去 Discord Developer Portal 重新產生新 token
-- 換新 token 後，要同步更新 service 設定再重啟
+- 換新 token 後，更新 `config.toml` 再重啟服務
 
 ## 注意事項
 

@@ -1,0 +1,11 @@
+[discord]
+token = ""
+nickname = "股市小幫手"
+
+[quotes]
+queue_size = 4
+request_timeout_seconds = 20
+query_timeout_seconds = 30
+
+[night]
+sample_file = "data/night-samples.jsonl"
