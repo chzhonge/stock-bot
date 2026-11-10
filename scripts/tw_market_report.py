@@ -9,6 +9,10 @@ from stock_bot.report.repository import MarketReportRepository
 from stock_bot.report.service import MarketReportService, WatchlistEntry
 
 
+INDEX_SYMBOL = "^TWII"
+INDEX_LABEL = "台指 (預估)"
+CHART_TITLE = "TAIEX Session Trend"
+
 WATCHLIST = (
     WatchlistEntry(symbol="00675L", label="富邦正2", exchange="tse"),
 )
@@ -31,9 +35,9 @@ def main():
     try:
         sent = service.run(
             day=today,
-            index_symbol=config.index_symbol,
-            index_label=config.index_label,
-            chart_title=config.chart_title,
+            index_symbol=INDEX_SYMBOL,
+            index_label=INDEX_LABEL,
+            chart_title=CHART_TITLE,
             watchlist=WATCHLIST,
             mention_user_id=config.mention_user_id,
         )

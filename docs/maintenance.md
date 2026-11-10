@@ -18,7 +18,6 @@ uv sync --locked
 | `[quotes]` | 等待佇列容量、行情請求逾時和查詢期限 |
 | `[night]` | Yahoo 與期交所夜盤網址、查詢別名和樣本檔路徑 |
 | `[report.discord]` | 快報 webhook 和可選的通知對象 ID |
-| `[report.index]` | 快報的指數代碼、顯示名稱和圖表標題 |
 | `[report.sources]` | 快報使用的證交所、CNN 和台灣行事曆網址 |
 
 兩支程式各自驗證需要的欄位。只跑 bot 時可以將快報 webhook 留空，只跑快報時可以將 bot token 留空。正式的 `config.toml` 含有憑證，已列入 Git 忽略清單。若使用其他檔名，請將正式設定放在專案目錄外。
@@ -43,13 +42,15 @@ Bot 一次只處理一筆取價。預設最多 4 筆等待，取價、繪圖和�
 
 ## 執行市場快報
 
-在 `[report.discord]` 填寫 webhook。快報的個股與 ETF 清單定義在 [scripts/tw_market_report.py](../scripts/tw_market_report.py) 的 `WATCHLIST`。新增標的時加一筆 `WatchlistEntry`，上市使用 `tse`，上櫃使用 `otc`。清單按順序查詢及顯示。
+在 `[report.discord]` 填寫 webhook。[快報腳本](../scripts/tw_market_report.py) 定義了加權指數 `^TWII`、顯示名稱和圖表標題。個股與 ETF 則列在同一個腳本的 `WATCHLIST`，並按順序查詢及顯示。新增標的時加一筆 `WatchlistEntry`，上市使用 `tse`，上櫃使用 `otc`。
 
 ```bash
 uv run --locked python -m scripts.tw_market_report --config config.toml
 ```
 
-此指令會在台灣上班日發送一則快報。若行事曆無法查詢，快報會依預設繼續執行。若從舊版設定升級，請將 `[[report.quotes]]` 或 `[[report.watchlist]]` 裡的自訂標的搬到腳本的 `WATCHLIST`，再移除舊設定區段。
+此指令會在台灣上班日發送一則快報。若行事曆無法查詢，快報會依預設繼續執行。
+
+從舊版升級時，若曾自訂 `[report.index]`、`[[report.quotes]]` 或 `[[report.watchlist]]`，先把自訂內容搬到快報腳本，再從 TOML 移除這些舊區段。
 
 ## 專案位置與維護
 

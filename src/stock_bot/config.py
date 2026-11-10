@@ -119,9 +119,6 @@ class ReportSources:
 class ReportConfig:
     webhook_url: str = field(repr=False)
     mention_user_id: str
-    index_symbol: str
-    index_label: str
-    chart_title: str
     sources: ReportSources
 
 
@@ -131,9 +128,10 @@ def load_report_config(path: Path) -> ReportConfig:
         raise ValueError("設定檔缺少 [report] 區段")
     if "watchlist" in config or "quotes" in config:
         raise ValueError("請將舊快報股票清單移到 scripts/tw_market_report.py 的 WATCHLIST，再移除設定檔中的清單")
+    if "index" in config:
+        raise ValueError("快報指數已移到 scripts/tw_market_report.py，請移除設定檔中的 [report.index]")
     validate_sections(config, {
         "discord": {"webhook_url", "mention_user_id"},
-        "index": {"symbol", "label", "chart_title"},
         "sources": {"quote_url", "sentiment_url", "sentiment_referer", "calendar_url"},
     })
 
@@ -151,19 +149,11 @@ def load_report_config(path: Path) -> ReportConfig:
     if not isinstance(mention, str) or (mention and not re.fullmatch(r"[0-9]+", mention)):
         raise ValueError("discord.mention_user_id 必須是數字字串或空字串")
 
-    index = config.get("index", {})
-    index_symbol = required_text(index, "symbol", "index")
-    index_label = required_text(index, "label", "index")
-    chart_title = required_text(index, "chart_title", "index")
-
     sources = config.get("sources", {})
 
     return ReportConfig(
         webhook_url=webhook,
         mention_user_id=mention,
-        index_symbol=index_symbol,
-        index_label=index_label,
-        chart_title=chart_title,
         sources=ReportSources(
             quote_url=required_url(sources, "quote_url", "sources"),
             sentiment_url=required_url(sources, "sentiment_url", "sources"),
