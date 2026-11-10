@@ -1,0 +1,22 @@
+services:
+  wud:
+    image: ghcr.io/getwud/wud:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - type: bind
+        source: "${STOCK_BOT_COMPOSE_DIR:?Set STOCK_BOT_COMPOSE_DIR to the NAS deployment directory}"
+        target: "${STOCK_BOT_COMPOSE_DIR}"
+        bind:
+          create_host_path: false
+      - wud-data:/store
+    environment:
+      WUD_SERVER_ENABLED: "false"
+      WUD_WATCHER_LOCAL_WATCHBYDEFAULT: "false"
+      WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_FILE: "${STOCK_BOT_COMPOSE_DIR}/compose.yaml"
+      WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_INCLUDEBYDEFAULT: "false"
+      WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_ONDIGEST: "true"
+      WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_AUTO: "true"
+
+volumes:
+  wud-data:

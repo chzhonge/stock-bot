@@ -42,19 +42,34 @@ docker compose logs --tail 50 stock-bot
 
 ### 設定 WUD
 
-把下面的設定合併到 NAS 現有的 WUD 服務，保留原有 Docker socket 掛載。將範例路徑換成實際部署目錄，只掛載 `stock-bot/`，讓 WUD 以同樣的絕對路徑讀寫 Compose 檔。含憑證的 `stock-bot-private/` 留在掛載範圍外。WUD 能透過 Docker socket 管理容器，管理介面請只開放給管理者透過內網或 VPN 使用。
+將 [WUD 的 Compose 範本](../deploy/wud/compose.yaml) 複製到 NAS 上獨立的 WUD 目錄，檔名保留 `compose.yaml`。例如 bot 放在 `/volume1/docker/projects/stock-bot/`，WUD 放在同一層的 `wud/`。Bot 的 Compose 和建置用的 Dockerfile 都留在 repo 根目錄。
 
-```yaml
-volumes:
-  - /volume1/docker/stock-bot:/volume1/docker/stock-bot
-environment:
-  WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_FILE: /volume1/docker/stock-bot/compose.yaml
-  WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_INCLUDEBYDEFAULT: "false"
-  WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_ONDIGEST: "true"
-  WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_AUTO: "true"
+在 WUD 目錄內建立 `.env`，填入 NAS 上存放 bot 的 `compose.yaml` 的絕對目錄。路徑末尾省略 `/`。
+
+```dotenv
+STOCK_BOT_COMPOSE_DIR=/volume1/docker/projects/stock-bot
 ```
 
-若套件為私有，在 WUD 設定 `WUD_REGISTRY_GHCR_LOCAL_USERNAME` 和 `WUD_REGISTRY_GHCR_LOCAL_TOKEN`。套用後確認 WUD 看得到 `stock-bot` 服務的容器。下次正式版發布後，確認 WUD 偵測到 `latest` 的 digest 改變、容器已重建、bot 重新上線，且尚未到期的夜盤樣本仍在。想先從 WUD 介面手動觸發，可把 `AUTO` 設成 `"false"`。
+WUD 透過 Docker socket 管理容器。範本會掛載 bot 的部署目錄供 WUD 更新 Compose，含憑證的 `stock-bot-private/` 應留在這個目錄之外。範本關閉網頁和 HTTP API，並只監看標有 `wud.watch: "true"` 的容器。
+
+若 NAS 的防火牆只放行 Docker 內建的 `bridge`，在 WUD 目錄新增本機 `compose.override.yaml`。需要指定 DNS 時，把範例位址換成容器可連到的 DNS。Compose 啟動時會合併這份檔案。
+
+```yaml
+services:
+  wud:
+    network_mode: bridge
+    dns:
+      - 192.0.2.53
+```
+
+若映像為私有，在本機 `compose.override.yaml` 的 `wud.environment` 加入 `WUD_REGISTRY_GHCR_LOCAL_USERNAME` 和 `WUD_REGISTRY_GHCR_LOCAL_TOKEN`。在 NAS 的 WUD 目錄啟動並查看日誌。
+
+```sh
+sudo docker compose config --quiet && sudo docker compose up -d wud
+sudo docker compose logs --tail 50 -f wud
+```
+
+先確認 WUD 能正常檢查 `stock-bot`。下次正式版發布後，確認 WUD 偵測到 `latest` 的 digest 改變、容器已重建、bot 重新上線，且尚未到期的夜盤樣本仍在。
 
 參考 [WUD Compose trigger](https://getwud.app/docs/configuration/triggers/docker-compose/) 和 [WUD GHCR 認證](https://getwud.app/docs/configuration/registries/ghcr/)。
 
