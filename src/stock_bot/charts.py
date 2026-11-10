@@ -2,6 +2,7 @@ import datetime
 from io import BytesIO
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.dates import AutoDateLocator, ConciseDateFormatter
 from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
 
@@ -295,144 +296,109 @@ def build_stock_chart(snapshot):
     return figure_png(fig)
 
 
-def build_taifex_night_chart(snapshot):
-    open_price = snapshot["open_price"]
-    high_price = snapshot["high_price"]
-    low_price = snapshot["low_price"]
-    last_price = snapshot["last_price"]
-    change_amount = snapshot["change_amount"] or 0.0
-    change_percent = snapshot["change_percent"] or 0.0
-    color = "#d64045" if change_amount < 0 else "#138a5c"
-    fill_color = "#f6d9dc" if change_amount < 0 else "#d7f0e4"
-
-    fig = Figure(figsize=(10.8, 6.6), dpi=160, facecolor="#0f1720")
-    ax = fig.add_axes([0.08, 0.16, 0.48, 0.68])
-    ax.set_facecolor("#15202b")
-
-    padding = max(60, (high_price - low_price) * 0.2)
-    ax.set_ylim(low_price - padding, high_price + padding)
-    ax.set_xlim(-0.8, 0.8)
-    ax.axhline(last_price, color=color, alpha=0.18, linewidth=12, zorder=1)
-    ax.vlines(0, low_price, high_price, color="#cfd8e3", linewidth=5, zorder=2)
-    candle_bottom = min(open_price, last_price)
-    candle_height = max(abs(last_price - open_price), 1)
-    ax.bar(0, candle_height, bottom=candle_bottom, width=0.42, color=fill_color, edgecolor=color, linewidth=2.5, zorder=3)
-    ax.scatter([0], [last_price], color=color, s=70, zorder=4)
-
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    ax.set_xticks([])
-    ax.tick_params(axis="y", labelsize=10, colors="#d4dee8")
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:,.0f}"))
-    ax.grid(axis="y", color="#324150", linewidth=0.8, alpha=0.65)
-
-    ax.annotate(f"H {high_price:,.0f}", xy=(0, high_price), xytext=(10, -4), textcoords="offset points", color="#d4dee8", fontsize=9)
-    ax.annotate(f"L {low_price:,.0f}", xy=(0, low_price), xytext=(10, -4), textcoords="offset points", color="#d4dee8", fontsize=9)
-    ax.annotate(f"Last {last_price:,.0f}", xy=(0, last_price), xytext=(10, 6), textcoords="offset points", color="#ffffff", fontsize=10, fontweight="bold")
-
-    fig.text(0.08, 0.91, "TX Night Session", fontsize=22, fontweight="bold", color="#f8fafc")
-    fig.text(
-        0.08,
-        0.868,
-        f"{snapshot['contract']}  {last_price:,.0f}  {change_amount:+.0f} ({change_percent:+.2f}%)",
-        fontsize=12,
-        color="#d7e0ea",
-    )
-    session_label = "15:00-05:00 Night Session"
-    fig.text(0.08, 0.835, session_label, fontsize=9.5, color="#94a3b8")
-
-    info_lines = [
-        ("Open", f"{open_price:,.0f}"),
-        ("High", f"{high_price:,.0f}"),
-        ("Low", f"{low_price:,.0f}"),
-        ("Last", f"{last_price:,.0f}"),
-        ("Prev Close", f"{snapshot['previous_close']:,.0f}" if snapshot.get("previous_close") is not None else "-"),
-        ("Avg", f"{snapshot['average_price']:,.2f}" if snapshot.get("average_price") is not None else "-"),
-        ("Volume", f"{int(snapshot['volume']):,}" if snapshot["volume"] is not None else "-"),
-        ("Best Bid", f"{snapshot['best_bid']:,.0f}" if snapshot["best_bid"] is not None else "-"),
-        ("Best Ask", f"{snapshot['best_ask']:,.0f}" if snapshot["best_ask"] is not None else "-"),
-    ]
-    y = 0.74
-    for label, value in info_lines:
-        fig.text(0.64, y, label, fontsize=10, color="#8ea1b5")
-        fig.text(0.64, y - 0.045, value, fontsize=16, fontweight="bold", color="#f8fafc")
-        y -= 0.105
-
-    updated_at = snapshot.get("updated_at")
-    updated_text = updated_at.strftime("%Y-%m-%d %H:%M") if updated_at else snapshot["report_date"]
-    source_label = "Yahoo WTX&" if snapshot.get("source") == "yahoo" else "TAIFEX TX night market"
-    fig.text(0.08, 0.04, f"Source: {source_label} | Updated {updated_text}", fontsize=8.8, color="#94a3b8")
-
+def build_history_chart(snapshot):
+    series = snapshot["series"]
+    comparison = len(series) > 1
+    title = "Adjusted return comparison" if comparison else f"{next(iter(series))} adjusted close"
+    fig = Figure(figsize=(11.5, 6.4), dpi=150, facecolor="#f3f6fb", layout="constrained")
+    ax = fig.subplots()
+    palette = ("#2458a6", "#ce5629", "#168765", "#8842a1", "#a07106")
+    for color, (code, values) in zip(palette, series.items()):
+        ax.plot(values.index, values, color=color, label=code, linewidth=1.8)
+    if comparison:
+        ax.axhline(0, color="#738397", linewidth=0.9, linestyle="--")
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:+.0f}%"))
+        ax.set_ylabel("Return from first common date")
+        ax.legend(loc="best", frameon=False)
+    else:
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:,.2f}"))
+        ax.set_ylabel("Adjusted close (local currency)")
+    locator = AutoDateLocator(minticks=4, maxticks=9)
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(ConciseDateFormatter(locator))
+    ax.grid(axis="y", alpha=0.24)
+    ax.set_title(f"{title}  |  {snapshot['period']}  |  Yahoo Finance", loc="left", fontweight="bold")
     return figure_png(fig)
 
 
-def build_taifex_night_candles_chart(snapshot, candles):
-    change_amount = snapshot["change_amount"] or 0.0
-    change_percent = snapshot["change_percent"] or 0.0
-    fig = Figure(figsize=(12.8, 7.0), dpi=160, facecolor="#0f1720")
-    ax = fig.add_axes([0.07, 0.18, 0.88, 0.64])
-    ax.set_facecolor("#15202b")
-
-    highs = [candle["high"] for candle in candles]
-    lows = [candle["low"] for candle in candles]
-    min_price = min(lows)
-    max_price = max(highs)
-    padding = max(35, (max_price - min_price) * 0.2)
-    ax.set_ylim(min_price - padding, max_price + padding)
-    ax.grid(axis="y", color="#324150", linewidth=0.8, alpha=0.65)
-    ax.grid(axis="x", color="#22303d", linewidth=0.6, alpha=0.45)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-
-    ax.tick_params(axis="x", labelsize=9, colors="#d4dee8", pad=8)
-    ax.tick_params(axis="y", labelsize=10, colors="#d4dee8")
-    ax.yaxis.tick_right()
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:,.0f}"))
-
-    x_values = list(range(len(candles)))
-    for idx, candle in enumerate(candles):
-        up = candle["close"] >= candle["open"]
-        edge_color = "#22c55e" if up else "#ef4444"
-        fill_color = "#d7f0e4" if up else "#f6d9dc"
-        ax.vlines(idx, candle["low"], candle["high"], color=edge_color, linewidth=1.6, zorder=2)
-        body_bottom = min(candle["open"], candle["close"])
-        body_height = max(abs(candle["close"] - candle["open"]), 1)
-        ax.bar(idx, body_height, bottom=body_bottom, width=0.62, color=fill_color, edgecolor=edge_color, linewidth=1.5, zorder=3)
-
-    step = max(1, len(candles) // 8)
-    tick_positions = x_values[::step]
-    if tick_positions[-1] != x_values[-1]:
-        tick_positions.append(x_values[-1])
-    ax.set_xticks(tick_positions)
-    ax.set_xticklabels([candles[idx]["time"].strftime("%H:%M") for idx in tick_positions])
-
-    fig.text(0.07, 0.91, "TX Night Session", fontsize=22, fontweight="bold", color="#f8fafc")
-    fig.text(
-        0.07,
-        0.872,
-        f"{snapshot['contract']}  {snapshot['last_price']:,.0f}  {change_amount:+.0f} ({change_percent:+.2f}%)",
-        fontsize=12,
-        color="#d7e0ea",
-    )
-    fig.text(0.07, 0.838, f"5-min candles from sampled TAIFEX quotes | bars {len(candles)}", fontsize=9.5, color="#94a3b8")
-
-    info_lines = [
-        ("Open", f"{snapshot['open_price']:,.0f}"),
-        ("High", f"{snapshot['high_price']:,.0f}"),
-        ("Low", f"{snapshot['low_price']:,.0f}"),
-        ("Last", f"{snapshot['last_price']:,.0f}"),
-        ("Prev Close", f"{snapshot['previous_close']:,.0f}" if snapshot.get("previous_close") is not None else "-"),
-        ("Volume", f"{int(snapshot['volume']):,}" if snapshot["volume"] is not None else "-"),
-    ]
-    y = 0.74
-    for label, value in info_lines:
-        fig.text(0.80, y, label, fontsize=10, color="#8ea1b5")
-        fig.text(0.80, y - 0.042, value, fontsize=15, fontweight="bold", color="#f8fafc")
-        y -= 0.10
+def build_night_chart(snapshot, bars):
+    last = snapshot["last_price"]
+    previous = snapshot.get("previous_close")
+    change = snapshot["change_amount"]
+    percent = snapshot["change_percent"]
+    color = "#18a95d" if change is not None and change < 0 else "#e35358" if change else "#94a3b8"
+    muted = "#94a3b8"
+    background = "#0b0f14"
+    fig = Figure(figsize=(11.5, 7.9), dpi=160, facecolor=background)
+    ax = fig.add_axes([0.03, 0.18, 0.88, 0.60], facecolor=background)
+    volumes = [(bar["time"], bar["volume"]) for bar in bars if bar["volume"] is not None]
+    if volumes:
+        volume_ax = fig.add_axes([0.03, 0.075, 0.88, 0.095], sharex=ax, facecolor=background)
+        volume_ax.bar(
+            [time for time, _ in volumes], [value for _, value in volumes],
+            width=4 / (24 * 60), color=color, alpha=0.42,
+        )
+        volume_ax.set_yticks([])
+        volume_ax.set_ylabel("5m vol", color=muted, rotation=0, labelpad=14, fontsize=7)
+        volume_ax.yaxis.set_label_position("right")
+        for spine in volume_ax.spines.values():
+            spine.set_visible(False)
+        ax.tick_params(axis="x", labelbottom=False)
+        time_ax = volume_ax
+    else:
+        time_ax = ax
 
     updated_at = snapshot.get("updated_at")
-    updated_text = updated_at.strftime("%Y-%m-%d %H:%M") if updated_at else snapshot["report_date"]
-    source_label = "Yahoo WTX&" if snapshot.get("source") == "yahoo" else "TAIFEX TX night market"
-    fig.text(0.07, 0.04, f"Source: {source_label} | Updated {updated_text}", fontsize=8.8, color="#94a3b8")
+    times = [bar["time"] for bar in bars]
+    prices = [bar["close"] for bar in bars]
+    if updated_at is not None and (not times or updated_at > times[-1]):
+        times.append(updated_at)
+        prices.append(last)
+    elif times:
+        prices[-1] = last
 
+    if times:
+        ax.plot(times, prices, color=color, linewidth=2.8, solid_capstyle="round", zorder=3)
+        baseline = snapshot["open_price"] if snapshot["open_price"] is not None else last
+        ax.fill_between(times, prices, baseline, color=color, alpha=0.09)
+        ax.scatter(times[-1], last, color=color, edgecolors="white", s=34, zorder=4)
+        ax.annotate(f"{last:,.0f}", (times[-1], last), xytext=(7, 0), textcoords="offset points",
+                    va="center", color="white", fontsize=10, fontweight="bold",
+                    bbox={"boxstyle": "round,pad=0.25", "fc": color, "ec": "none"})
+        step = max(1, (len(times) + 7) // 8)
+        ticks = times[::step]
+        time_ax.set_xticks(ticks, [time.strftime("%H:%M") for time in ticks])
+        ax.margins(x=0.06)
+    else:
+        time_ax.set_xticks([])
+
+    if previous is not None:
+        ax.axhline(previous, color="#489dce", linestyle="--", linewidth=1.2)
+        ax.annotate("Prev Close", (0.04, previous), xycoords=("axes fraction", "data"),
+                    xytext=(0, 3), textcoords="offset points", color="#489dce", fontsize=9)
+
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.grid(axis="y", color="#26303a", alpha=0.32)
+    ax.yaxis.tick_right()
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:,.0f}"))
+    ax.tick_params(axis="y", colors=muted, length=0, labelsize=9)
+    time_ax.tick_params(axis="x", colors=muted, length=0, labelsize=9)
+
+    fig.text(0.03, 0.94, "TX NIGHT SESSION", fontsize=23, fontweight="bold", color="white")
+    fig.text(0.03, 0.875, f"{last:,.0f}", fontsize=34, fontweight="bold", color="white")
+    change_text = f"{change:+,.0f} ({percent:+.2f}%)" if change is not None and percent is not None else "Change unavailable"
+    fig.text(0.25, 0.883, change_text, fontsize=19, fontweight="bold", color=color)
+    for i, (label, key) in enumerate((("OPEN", "open_price"), ("HIGH", "high_price"), ("LOW", "low_price"), ("VOLUME", "volume"))):
+        x = 0.03 + i * 0.17
+        value = snapshot.get(key)
+        fig.text(x, 0.823, label, fontsize=8, fontweight="bold", color=muted)
+        fig.text(x, 0.788, f"{value:,.0f}" if value is not None else "-", fontsize=14,
+                 fontweight="bold", color="white")
+
+    source = "Yahoo WTX&" if snapshot.get("source") == "yahoo" else "TAIFEX TX"
+    coverage = "5-min history" if snapshot.get("history") else "5-min local samples" if bars else "Quote only"
+    updated = updated_at.strftime("%Y-%m-%d %H:%M") if updated_at else snapshot["report_date"]
+    fig.text(0.03, 0.024, f"{source} | {coverage}", fontsize=8, color=muted)
+    fig.text(0.96, 0.024, f"Updated {updated}", ha="right", fontsize=8, color=muted)
     return figure_png(fig)

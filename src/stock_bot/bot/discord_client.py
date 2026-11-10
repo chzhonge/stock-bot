@@ -90,16 +90,33 @@ class StockChartBot(discord.Client):
         if reply_type == "night":
             file_name = "tx_night_session.png"
             source_label = "Yahoo WTX&" if snapshot.get("source") == "yahoo" else "TAIFEX 期交所夜盤行情"
+            change = snapshot["change_amount"]
+            percent = snapshot["change_percent"]
+            trend = f"漲跌 `{change:+.0f}`  漲跌幅 `{percent:+.2f}%`" if change is not None and percent is not None else "漲跌資料未提供"
             embed = discord.Embed(
                 title=f"TX 夜盤 {snapshot['contract']}",
-                description=(
-                    f"最新 `{snapshot['last_price']:,.0f}`  "
-                    f"漲跌 `{snapshot['change_amount']:+.0f}`  "
-                    f"漲跌幅 `{snapshot['change_percent']:+.2f}%`"
-                ),
-                color=0x138A5C if snapshot["change_amount"] >= 0 else 0xD64045,
+                description=f"最新 `{snapshot['last_price']:,.0f}`  {trend}",
+                color=0x18A95D if change is not None and change < 0 else 0xE35358 if change else 0x94A3B8,
             )
             embed.set_footer(text=f"資料來源 {source_label}")
+        elif reply_type == "history":
+            series = snapshot["series"]
+            period = snapshot["period"]
+            comparison = len(series) > 1
+            file_name = "stock_comparison.png" if comparison else "stock_history.png"
+            title = f"多標的比較 · {period}" if comparison else f"{next(iter(series))} · {period}"
+            dates = next(iter(series.values())).index
+            lines = [f"`{dates[0]:%Y-%m-%d}` 至 `{dates[-1]:%Y-%m-%d}`"]
+            if comparison:
+                lines.extend(f"**{code}** `{values.iloc[-1]:+.2f}%`" for code, values in series.items())
+                footer = "Yahoo Finance · 共同交易日 · 調整後收盤價報酬率（各標的原幣）"
+            else:
+                values = next(iter(series.values()))
+                change = (values.iloc[-1] / values.iloc[0] - 1) * 100
+                lines.append(f"最新調整後收盤價 `{values.iloc[-1]:,.2f}`  區間漲跌 `{change:+.2f}%`")
+                footer = "Yahoo Finance · 日線 · 調整後收盤價"
+            embed = discord.Embed(title=title, description="\n".join(lines), color=0x2458A6)
+            embed.set_footer(text=footer)
         else:
             file_name = f"{snapshot['code']}_intraday.png"
             embed = discord.Embed(

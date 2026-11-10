@@ -3,8 +3,9 @@ from contextlib import contextmanager
 
 from yfinance.exceptions import YFRateLimitError
 
-from stock_bot.charts import build_stock_chart, build_taifex_night_candles_chart, build_taifex_night_chart
+from stock_bot.charts import build_history_chart, build_night_chart, build_stock_chart
 from stock_bot.market.night import build_night_candles
+from stock_bot.market.quotes import align_history, parse_stock_query
 
 
 YAHOO_COOLDOWN_SECONDS = 30
@@ -64,8 +65,19 @@ class StockChartService:
                 else:
                     if loop.time() < yahoo_retry_at:
                         raise ValueError("Yahoo Finance 暫時限制查詢，請稍後再試")
-                    data = await asyncio.to_thread(self.repository.fetch_stock, target or user_input)
-                    reply = ("stock", data, None)
+                    symbols, period = parse_stock_query(user_input, self.aliases)
+                    if period is None:
+                        data = await asyncio.to_thread(self.repository.fetch_stock, symbols[0])
+                        reply = ("stock", data, None)
+                    else:
+                        history = {}
+                        for symbol in symbols:
+                            remaining = deadline - loop.time()
+                            if result.done() or remaining <= 0:
+                                raise TimeoutError
+                            code, series = await asyncio.to_thread(self.repository.fetch_history, symbol, period, remaining)
+                            history[code] = series
+                        reply = ("history", {"period": period, "series": align_history(history)}, None)
                 if not result.done():
                     result.set_result(reply)
             except asyncio.CancelledError:
@@ -84,7 +96,9 @@ class StockChartService:
     async def collect_night_quote(self, *, include_candles=False):
         async with self.night_lock:
             snapshot, samples = await asyncio.to_thread(self.repository.collect_night_quote, include_candles)
-        return snapshot, build_night_candles(samples) if samples is not None else None
+        if samples is None:
+            return snapshot, None
+        return snapshot, snapshot.get("history") or build_night_candles(samples)
 
     async def render(self, reply_type, snapshot, candles):
         async with self.chart_lock:
@@ -94,6 +108,6 @@ class StockChartService:
 def render_chart(reply_type, snapshot, candles):
     if reply_type == "stock":
         return build_stock_chart(snapshot)
-    if len(candles) >= 2:
-        return build_taifex_night_candles_chart(snapshot, candles)
-    return build_taifex_night_chart(snapshot)
+    if reply_type == "history":
+        return build_history_chart(snapshot)
+    return build_night_chart(snapshot, candles)

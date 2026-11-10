@@ -20,6 +20,61 @@ HTTP_HEADERS = {
     "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
 }
 
+
+def night_session_start(timestamp):
+    local = timestamp.astimezone(TAIWAN_TZ)
+    start = local.replace(hour=15, minute=0, second=0, microsecond=0)
+    if local.hour < 15:
+        start -= datetime.timedelta(days=1)
+    return start
+
+
+def yahoo_chart_data(soup):
+    for script in soup.find_all("script"):
+        content = script.string or ""
+        match = re.search(r'"libra"\s*:\s*\{\s*"WTX&"\s*:\s*', content)
+        if match:
+            try:
+                chart, _ = json.JSONDecoder().raw_decode(content, match.end())
+            except ValueError:
+                continue
+            if isinstance(chart, dict):
+                return chart
+    return {}
+
+
+def yahoo_night_bars(chart, updated_at):
+    start = night_session_start(updated_at)
+    end = min(start + datetime.timedelta(hours=14), updated_at)
+    try:
+        timestamps = chart["timestamp"]
+        quote = chart["indicators"]["quote"][0]
+        closes, volumes = quote["close"], quote["volume"]
+        if not all(isinstance(values, list) for values in (timestamps, closes, volumes)):
+            return []
+        if not len(timestamps) == len(closes) == len(volumes):
+            return []
+    except (KeyError, IndexError, TypeError):
+        return []
+
+    bars = {}
+    first, last = start.timestamp(), end.timestamp()
+    points = sorted(
+        ((stamp, close, volume) for stamp, close, volume in zip(timestamps, closes, volumes)
+         if isinstance(stamp, (int, float)) and first <= stamp <= last and isinstance(close, (int, float))),
+        key=lambda point: point[0],
+    )
+    for stamp, close, volume in points:
+        time = datetime.datetime.fromtimestamp(stamp, TAIWAN_TZ)
+        # Yahoo labels minute bars by their closing time.
+        slot = max(0, int((time - start).total_seconds() - 1) // 300)
+        bucket = start + datetime.timedelta(minutes=slot * 5)
+        bar = bars.setdefault(bucket, {"time": bucket, "close": close, "volume": None})
+        bar["close"] = close
+        if isinstance(volume, (int, float)) and volume >= 0:
+            bar["volume"] = (bar["volume"] or 0) + volume
+    return list(bars.values())
+
 def fetch_taifex_night_snapshot(url, timeout):
     response = requests.get(url, timeout=timeout, headers=HTTP_HEADERS)
     response.raise_for_status()
@@ -47,10 +102,12 @@ def fetch_taifex_night_snapshot(url, timeout):
 
     def parse_number(value):
         clean = value.strip().replace(",", "").replace("%", "")
-        clean = clean.replace("▲", "").replace("▼", "")
+        direction = clean[:1]
+        clean = clean.lstrip("▲▼").strip()
         if clean == "-":
             return None
-        return float(clean)
+        number = float(clean)
+        return -abs(number) if direction == "▼" else number
 
     return {
         "report_date": report_date,
@@ -73,7 +130,8 @@ def fetch_taifex_night_snapshot(url, timeout):
 def fetch_yahoo_night_snapshot(url, timeout):
     response = requests.get(url, timeout=timeout, headers=HTTP_HEADERS)
     response.raise_for_status()
-    text = BeautifulSoup(response.text, "html.parser").get_text("\n", strip=True)
+    soup = BeautifulSoup(response.content, "html.parser")
+    text = soup.get_text("\n", strip=True)
 
     def parse_number(value):
         clean = value.strip().replace(",", "").replace("%", "")
@@ -95,6 +153,20 @@ def fetch_yahoo_night_snapshot(url, timeout):
 
     timestamp_text = timestamp_match.group(1)
     timestamp = datetime.datetime.strptime(timestamp_text, "%Y/%m/%d %H:%M").replace(tzinfo=TAIWAN_TZ)
+    last_price = extract(r"成交\s+([0-9,]+(?:\.[0-9]+)?)", "last", parse_number)
+    previous_close = extract(r"昨收\s+([0-9,]+(?:\.[0-9]+)?)", "previous close", parse_number)
+    change_amount = last_price - previous_close
+    chart = yahoo_chart_data(soup)
+    # The visible Yahoo total can be abbreviated (for example, 15 for 15,457).
+    volume = None
+    quote = chart.get("quote")
+    meta = chart.get("meta")
+    if isinstance(quote, dict) and isinstance(meta, dict) and meta.get("regularMarketTime") == int(timestamp.timestamp()):
+        try:
+            if float(quote["price"]) == last_price:
+                volume = parse_number(str(quote["volume"]))
+        except (KeyError, TypeError, ValueError):
+            pass
 
     return {
         "report_date": timestamp.strftime("%Y/%m/%d"),
@@ -103,18 +175,19 @@ def fetch_yahoo_night_snapshot(url, timeout):
         "open_price": extract(r"開盤\s+([0-9,]+(?:\.[0-9]+)?)", "open", parse_number),
         "high_price": extract(r"最高\s+([0-9,]+(?:\.[0-9]+)?)", "high", parse_number),
         "low_price": extract(r"最低\s+([0-9,]+(?:\.[0-9]+)?)", "low", parse_number),
-        "last_price": extract(r"成交\s+([0-9,]+(?:\.[0-9]+)?)", "last", parse_number),
-        "change_amount": extract(r"漲跌\s+([+-]?[0-9,]+(?:\.[0-9]+)?)", "change amount", parse_number),
-        "change_percent": extract(r"漲跌幅\s+([+-]?[0-9,]+(?:\.[0-9]+)?)%", "change percent", parse_number),
-        "volume": extract(r"總量\s+([0-9,]+)", "volume", parse_number),
+        "last_price": last_price,
+        "change_amount": change_amount,
+        "change_percent": change_amount / previous_close * 100 if previous_close else None,
+        "volume": volume,
         "settlement_price": None,
         "open_interest": extract(r"未平倉\s+([0-9,]+)", "open interest", parse_number, required=False),
         "best_bid": extract(r"買價\s+([0-9,]+(?:\.[0-9]+)?)", "best bid", parse_number, required=False),
         "best_ask": extract(r"賣價\s+([0-9,]+(?:\.[0-9]+)?)", "best ask", parse_number, required=False),
         "source": "yahoo",
         "updated_at": timestamp,
-        "previous_close": extract(r"昨收\s+([0-9,]+(?:\.[0-9]+)?)", "previous close", parse_number),
+        "previous_close": previous_close,
         "average_price": None,
+        "history": yahoo_night_bars(chart, timestamp),
     }
 
 
@@ -130,11 +203,12 @@ def fetch_night_snapshot(yahoo_url, taifex_url, timeout):
 
 
 def record_night_sample(snapshot, sample_file):
-    now = datetime.datetime.now(TAIWAN_TZ)
+    updated_at = snapshot.get("updated_at") or datetime.datetime.now(TAIWAN_TZ)
     sample = {
-        "ts": now.isoformat(),
+        "ts": updated_at.isoformat(),
         "report_date": snapshot["report_date"],
         "contract": snapshot["contract"],
+        "source": snapshot.get("source"),
         "last_price": snapshot["last_price"],
         "volume": snapshot["volume"],
     }
