@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     volumes:
       - type: bind
-        source: ./config.toml
+        source: ../stock-bot-private/config.toml
         target: /app/config.toml
         read_only: true
         bind:
