@@ -52,11 +52,11 @@ def chart_frame(title, *, has_volume=False):
     return fig, ax
 
 
-def headline(fig, price, change, percent, decimals):
-    fig.text(0.04, 0.875, price_text(price, decimals), fontsize=32,
+def headline(fig, price, change, percent, decimals, *, y=0.875):
+    fig.text(0.04, y, price_text(price, decimals), fontsize=32,
              fontweight="bold", color=FOREGROUND)
     if change is not None and percent is not None:
-        fig.text(0.33, 0.883, f"{change:+,.{decimals}f} ({percent:+.2f}%)",
+        fig.text(0.33, y + 0.008, f"{change:+,.{decimals}f} ({percent:+.2f}%)",
                  fontsize=18, fontweight="bold", color=trend_color(change))
 
 
@@ -168,7 +168,7 @@ def build_history_chart(snapshot):
         fig.text(0.04, 0.913, "ADJUSTED CLOSE", fontsize=9, fontweight="bold", color=MUTED)
         fig.text(0.33, 0.913, "PERIOD RETURN", fontsize=9, fontweight="bold", color=MUTED)
         change = first.iloc[-1] - first.iloc[0]
-        headline(fig, first.iloc[-1], change, change / first.iloc[0] * 100, 2)
+        headline(fig, first.iloc[-1], change, change / first.iloc[0] * 100, 2, y=0.85)
         metrics(fig, [("PERIOD", period, FOREGROUND), ("DATE RANGE", dates, FOREGROUND)])
         price_line(ax, list(first.index), first.tolist(), previous=None, baseline=first.iloc[0],
                    color=trend_color(change), decimals=2)
