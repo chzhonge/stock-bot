@@ -1,108 +1,67 @@
-# 股票工具維護手冊
+# 股票工具操作手冊
 
-這個專案有兩個執行入口。常駐 Discord bot 接收股票與夜盤查詢，一次性快報則在台灣上班日產生市場摘要並透過 Discord webhook 發送。兩支程式共用行情模組、繪圖程式和一份 TOML 設定。
+Discord bot 提供股票與夜盤查詢。市場快報是可手動執行的一次性指令，兩者共用 `config.toml`。
 
-## 安裝與設定
+## 首次部署
 
-安裝 uv 後，在專案根目錄同步環境。專案預設使用 Python 3.11，依賴版本由 `uv.lock` 鎖定。
+1. 依照下方「發版與更新」發布第一個 Release，確認 GitHub Actions 成功產生 `ghcr.io/chzhonge/dot-price-bot:latest`。
+2. 把 `compose.yaml` 放到 NAS 的部署目錄。將 [config.example.toml](../config.example.toml) 複製為同目錄的 `config.toml`，填寫 `[discord]` 的 token。若要執行快報，再填 `[report.discord]` 的 webhook。正式設定含有憑證，請留在 NAS。
+3. 在 Discord Developer Portal 啟用 **Message Content Intent**，並讓 bot 能在使用的頻道讀取和傳送訊息、嵌入連結及附加檔案。
+4. 給容器的 UID/GID `10001` 讀取 `config.toml` 的權限。若 GHCR 套件為私有，先用 `docker login ghcr.io -u YOUR_GITHUB_USERNAME` 登入。密碼提示請貼上可讀取該套件且具 `read:packages` 權限的 classic PAT。
 
-```bash
+在 NAS 部署目錄執行以下指令。上線後，可以在 Discord 試 `@機器人 2330`、`@機器人 0050 2330 6mo` 或 `@機器人 夜盤`。
+
+```sh
+docker compose config --quiet
+docker compose pull bot
+docker compose up -d bot
+docker compose logs --tail 50 bot
+```
+
+## 發版與更新
+
+### 發布映像
+
+1. 將包含 Dockerfile 和 workflow 的 `codex/architecture-refactor` 分支推送到 GitHub。
+2. 建立 Release 時新增 tag（例如 `v0.1.0`），在 **Target** 選 `codex/architecture-refactor`。若選用既有 tag，確認它指向包含部署設定的 commit。
+3. 按 **Publish release** 發布正式版，再到 **Actions** 查看結果。Workflow 會從 tag 指向的 commit 建置 `linux/amd64` 映像。兩個指令入口的檢查通過後，同一份映像會以 Release tag 和 `latest` 發布到 GHCR。
+
+### 設定 WUD
+
+把下面的設定合併到 NAS 現有的 WUD 服務，保留原有 Docker socket 掛載。將範例路徑換成實際部署目錄，讓 WUD 以同樣的絕對路徑讀寫 Compose 檔。
+
+```yaml
+volumes:
+  - /volume1/docker/dot-price-bot:/volume1/docker/dot-price-bot
+environment:
+  WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_FILE: /volume1/docker/dot-price-bot/compose.yaml
+  WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_INCLUDEBYDEFAULT: "false"
+  WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_ONDIGEST: "true"
+  WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_AUTO: "true"
+```
+
+若套件為私有，在 WUD 設定 `WUD_REGISTRY_GHCR_LOCAL_USERNAME` 和 `WUD_REGISTRY_GHCR_LOCAL_TOKEN`。套用後確認 WUD 看得到 `bot`。下次正式版發布後，確認 WUD 偵測到 `latest` 的 digest 改變、容器已重建、bot 重新上線，且尚未到期的夜盤樣本仍在。想先從 WUD 介面手動觸發，可把 `AUTO` 設成 `"false"`。
+
+參考 [WUD Compose trigger](https://getwud.app/docs/configuration/triggers/docker-compose/) 和 [WUD GHCR 認證](https://getwud.app/docs/configuration/registries/ghcr/)。
+
+## 日常操作
+
+在本機安裝 uv 後，從專案根目錄啟動 bot 或手動執行一次市場快報。
+
+```sh
 uv sync --locked
-```
-
-複製 [config.example.toml](../config.example.toml) 為 `config.toml`，再填寫要執行的功能所需的區段。
-
-| 區段 | 用途 |
-| --- | --- |
-| `[discord]` | 常駐 bot 的 token 和顯示暱稱 |
-| `[quotes]` | 等待佇列容量、行情請求逾時和查詢期限 |
-| `[night]` | Yahoo 與期交所夜盤網址和樣本檔路徑 |
-| `[aliases]` | 自訂查詢別名，可直接對應股票代碼或夜盤 |
-| `[report.discord]` | 快報 webhook 和可選的通知對象 ID |
-| `[report.sources]` | 快報使用的證交所、CNN 和台灣行事曆網址 |
-
-兩支程式各自驗證需要的欄位。只跑 bot 時可以將快報 webhook 留空，只跑快報時可以將 bot token 留空。正式的 `config.toml` 含有憑證，已列入 Git 忽略清單。若使用其他檔名，請將正式設定放在專案目錄外。
-
-## 啟動 Discord bot
-
-在 Discord Developer Portal 啟用 **Message Content Intent**，並給 bot 所用頻道的訊息讀取、發送、嵌入連結與附件權限。在專案根目錄執行：
-
-```bash
-uv run --locked python main.py --config config.toml
-```
-
-也可以用 `uv run --locked stock-chart-bot --config config.toml` 啟動同一支 bot。上線後，在 Discord 傳送 `@機器人 2330`、`@機器人 0050`、`@機器人 AAPL` 或 `@機器人 夜盤`。
-
-### 區間查詢與多標的比較
-
-| 查詢 | 回覆 |
-| --- | --- |
-| `@機器人 0050` | 最新交易日的 5 分鐘盤中圖 |
-| `@機器人 0050 2y` | 最近兩年的調整後收盤價日線 |
-| `@機器人 0050 2330 AAPL 6mo` | 最近六個月的多標的報酬率 |
-| `@機器人 台積電, Apple` | 用別名比較最近一年 |
-| `@機器人 NASDAQ, SP500, 加權指數 2y` | 比較三個指數最近兩年的報酬率 |
-
-區間可用正整數加 `d`（天）、`mo`（月）或 `y`（年），例如 `14d`、`18mo` 或 `3y`。也支援 `ytd`（今年至今）與 `max`（可取得的完整歷史）。單一標的加 `1d` 會顯示盤中圖。短區間內若沒有足夠的交易日，請延長區間。
-
-每次最多比較五個標的，代碼可用空格或逗號分隔。含空白的別名在多標的查詢時請用逗號分隔。比較以第一個共同交易日為 0%，採用調整後收盤價，各標的以原幣計算。
-
-內建指數別名如下。可直接輸入代碼，也可用 `[aliases]` 自訂別名。
-
-| 指數 | 代碼 | 常用別名 |
-| --- | --- | --- |
-| NASDAQ 綜合指數 | `^IXIC` | `NASDAQ` |
-| S&P 500 | `^GSPC` | `SP500`、`S&P 500` |
-| 道瓊工業平均指數 | `^DJI` | `道瓊`、`道瓊工業平均指數`、`DOW`、`DJIA` |
-| 費城半導體指數 | `^SOX` | `費半`、`費城半導體指數`、`SOX` |
-| 台灣加權指數 | `^TWII` | `加權指數`、`台灣加權指數` |
-
-Bot 一次只處理一筆取價。預設最多 4 筆等待，取價、繪圖和回覆中的查詢合計最多 5 筆。達到任一上限就回覆忙碌。排隊和取價共用 30 秒期限。圖表直接產生 PNG 附件。
-
-所有圖表共用深色版型。盤中和快報顯示現價、開高低和昨收線；夜盤另顯示可取得的成交量；區間圖顯示調整後收盤價與日期範圍；比較圖在上方列出各標的報酬，線色與摘要對應。單一標的使用台灣慣例，紅色代表上漲、綠色代表下跌。
-
-盤中圖和 Discord 摘要會顯示資料所屬的交易日期，採用交易所當地日期。資料來自較早的交易日時，圖上會標示 `Previous session`，例如開盤前或休市日。X 軸同樣使用交易所當地時間，保留第一筆和最後一筆資料的時間刻度。台股標示 `Taipei time`，美股標示 `ET`。右下角則以台灣時間顯示最後一筆資料的時間，包含完整日期。
-
-在 `[aliases]` 中以查詢目標當 key，`night` 代表夜盤。每個別名獨佔一行並保留尾端逗號，新增或移除時 Git diff 會直接顯示變動的那一行。
-
-```toml
-[aliases]
-2330 = [
-    "台積電",
-    "TSMC",
-]
-```
-
-代碼含點號時，請用引號包住整個 key，例如 `"BRK.B"`。別名忽略大小寫和前後空白，且不能重複。舊的 `night.aliases` 仍可讀取，同名時以 `[aliases]` 為準。
-
-### 夜盤樣本
-
-夜盤報價優先使用 Yahoo `WTX&`，失敗時改查期交所 TX。Yahoo 頁面有分鐘資料時，bot 會從 15:00 起聚合成 5 分鐘折線與成交量。Bot 也在台灣時間 15:00 至隔天 05:00 每分鐘保存一筆報價，供歷史資料缺少時使用。圖表底部會標示更新時間。沒有可用的走勢時，仍會顯示當下報價。
-
-預設樣本檔為 `data/night-samples.jsonl`。相對路徑以 `config.toml` 所在目錄為準。首次取樣與之後每小時會清除超過 16 小時的舊資料。使用 Docker 時，可唯讀掛載設定檔，並把 `night.sample_file` 指向持久資料卷，例如 `/data/night-samples.jsonl`。
-
-## 執行市場快報
-
-在 `[report.discord]` 填寫 webhook。[快報腳本](../scripts/tw_market_report.py) 定義了加權指數 `^TWII`、顯示名稱和圖表標題。個股與 ETF 則列在同一個腳本的 `WATCHLIST`，並按順序查詢及顯示。新增標的時加一筆 `WatchlistEntry`，上市使用 `tse`，上櫃使用 `otc`。
-
-```bash
+uv run --locked stock-chart-bot --config config.toml
 uv run --locked python -m scripts.tw_market_report --config config.toml
 ```
 
-此指令會在台灣上班日發送一則快報。若行事曆無法查詢，快報會依預設繼續執行。
+NAS 上可用現有映像手動執行快報。快報在台灣上班日發送。若行事曆來源無法查詢，會繼續執行。
 
-從舊版升級時，若曾自訂 `[report.index]`、`[[report.quotes]]` 或 `[[report.watchlist]]`，先把自訂內容搬到快報腳本，再從 TOML 移除這些舊區段。
+```sh
+docker compose run --rm bot python -m scripts.tw_market_report --config /app/config.toml
+```
 
-## 專案位置與維護
+- **查詢別名**在 `config.toml` 的 `[aliases]` 調整，以股票代碼或 `night` 作為對應目標。格式可參考 [設定範例](../config.example.toml)。
+- **快報股票清單**在 [快報腳本](../scripts/tw_market_report.py) 的 `WATCHLIST` 調整。上市用 `tse`，上櫃用 `otc`。NAS 要用到新清單時，依前面的發版步驟更新映像。
+- **夜盤樣本**預設位於設定檔旁的 `data/night-samples.jsonl`。NAS 將 `/app/data` 存在 `night-data` 資料卷中。自訂 `night.sample_file` 時，請把路徑留在這個資料卷內。
 
-| 路徑 | 用途 |
-| --- | --- |
-| `main.py` | 常駐 bot 的根目錄入口 |
-| `scripts/tw_market_report.py` | 一次性快報的入口與股票清單 |
-| `src/stock_bot/bot/` | Discord 事件、查詢佇列和夜盤取樣流程 |
-| `src/stock_bot/report/` | 快報流程、資料來源和 webhook 發送 |
-| `src/stock_bot/market/` | 共用盤中取價、夜盤查詢與樣本存取 |
-| `src/stock_bot/config.py`、`src/stock_bot/charts.py` | TOML 驗證與 PNG 繪圖 |
-| `pyproject.toml`、`uv.lock` | 專案依賴與鎖定版本 |
-
-新增依賴用 `uv add 套件名稱`。更新既有套件用 `uv lock --upgrade-package 套件名稱`。更新後執行 `uv sync --locked`，並把依賴宣告和鎖定檔的變更一併提交。
+若從舊版升級，將 `[report.index]`、`[[report.quotes]]` 或 `[[report.watchlist]]` 的自訂內容移到快報腳本，再從 TOML 移除這些舊區段。

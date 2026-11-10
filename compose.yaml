@@ -1,0 +1,19 @@
+services:
+  bot:
+    image: ghcr.io/chzhonge/dot-price-bot:latest
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ./config.toml
+        target: /app/config.toml
+        read_only: true
+        bind:
+          create_host_path: false
+      - night-data:/app/data
+    labels:
+      wud.watch: "true"
+      wud.watch.digest: "true"
+      wud.trigger.include: dockercompose.dotpricebot
+
+volumes:
+  night-data:
