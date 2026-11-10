@@ -24,7 +24,35 @@ docker compose logs --tail 50 stock-bot
 
 若 NAS 本身能解析 `discord.com`，但容器查 DNS 失敗、直接連外部 IP 的 TCP 443 也逾時，先查 NAS 的轉送防火牆是否放行 Compose 專用網路的子網。單獨指定 `dns` 只會改變查詢對象，容器仍會使用原來的網路。
 
-可在 NAS 防火牆放行該子網所需的 DNS 和出站 HTTPS。若防火牆已放行 Docker 內建的 `bridge`，也可在 NAS 本機的 `stock-bot` 服務設定 `network_mode: bridge`，並視需要用 `dns` 指定容器可連到的 DNS 伺服器。將這些環境專用的設定留在 WUD 讀取的 NAS Compose 檔。 [Docker 網路文件](https://docs.docker.com/compose/how-tos/networking/) · [Compose DNS 設定](https://docs.docker.com/reference/compose-file/services/#dns)
+可在 NAS 防火牆放行該子網所需的 DNS 和出站 HTTPS。若防火牆已放行 Docker 內建的 `bridge`，也可用下方的本機覆寫檔改走這個網路。 [Docker 網路文件](https://docs.docker.com/compose/how-tos/networking/) · [Compose DNS 設定](https://docs.docker.com/reference/compose-file/services/#dns)
+
+### NAS 本機網路覆寫
+
+Bot 和 WUD 各有自己的部署目錄。需要改網路時，在該服務的 `compose.yaml` 旁建立 `compose.override.yaml`。平常執行 `docker compose up` 時，Compose 會自動合併同目錄的兩份檔案。重裝或搬機時，記得一起備份有使用的覆寫檔。 [Docker Compose 覆寫文件](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/)
+
+若 NAS 防火牆只放行 Docker 內建的 `bridge`，可依需要建立以下檔案。`192.0.2.53` 是範例位址，使用前請換成容器可連到的 DNS。若預設 DNS 可用，可省略 `dns`。
+
+**Bot 的 `stock-bot/compose.override.yaml`**
+
+```yaml
+services:
+  stock-bot:
+    network_mode: bridge
+    dns:
+      - 192.0.2.53
+```
+
+**WUD 的 `wud/compose.override.yaml`**
+
+```yaml
+services:
+  wud:
+    network_mode: bridge
+    dns:
+      - 192.0.2.53
+```
+
+在各自的部署目錄執行 `docker compose config --quiet` 驗證設定，再用 `docker compose up -d` 套用。
 
 ## 發版與更新
 
@@ -56,15 +84,7 @@ WUD_AUTH_ADMIN_PASSWORD=
 
 WUD 透過 Docker socket 管理容器。範本會掛載 bot 的部署目錄供 WUD 更新 Compose，含憑證的 `stock-bot-private/` 應留在這個目錄之外。範本關閉網頁和 HTTP API，並只監看標有 `wud.watch: "true"` 的容器。
 
-若 NAS 的防火牆只放行 Docker 內建的 `bridge`，在 WUD 目錄新增本機 `compose.override.yaml`。需要指定 DNS 時，把範例位址換成容器可連到的 DNS。Compose 啟動時會合併這份檔案。
-
-```yaml
-services:
-  wud:
-    network_mode: bridge
-    dns:
-      - 192.0.2.53
-```
+若 WUD 也需要指定 bridge 或 DNS，啟動前請參考 [NAS 本機網路覆寫](#nas-本機網路覆寫) 建立自己的覆寫檔。
 
 若映像為私有，在本機 `compose.override.yaml` 的 `wud.environment` 加入 `WUD_REGISTRY_GHCR_LOCAL_USERNAME` 和 `WUD_REGISTRY_GHCR_LOCAL_TOKEN`。在 NAS 的 WUD 目錄啟動並查看日誌。
 
