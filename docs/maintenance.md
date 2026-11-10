@@ -1,36 +1,98 @@
 # 股票工具操作手冊
 
-Discord bot 提供股票與夜盤查詢。市場快報是可手動執行的一次性指令，兩者共用 `config.toml`。
+## 第一次安裝
 
-## 首次部署
+先讓 Discord bot 跑起來，再安裝 WUD 自動更新。Bot 需要已發布的 `ghcr.io/chzhonge/stock-bot:latest`。如果 GHCR 上還沒有映像，先依[發版步驟](#發布新版本)發布第一版。
 
-1. 依照下方「發版與更新」發布第一個 Release，確認 GitHub Actions 成功產生 `ghcr.io/chzhonge/stock-bot:latest`。
-2. 把 `compose.yaml` 放到 NAS 的部署目錄，例如 `/volume1/docker/stock-bot/`。在同一層建立 `stock-bot-private/`，把 [config.example.toml](../config.example.toml) 複製成 `/volume1/docker/stock-bot-private/config.toml`。填寫 `[discord]` 的 token，若要執行快報，再填 `[report.discord]` 的 webhook。若先前已部署，將原本的 `config.toml` 搬到新位置，再用下方的 Compose 指令套用掛載變更。
-3. 在 Discord Developer Portal 啟用 **Message Content Intent**，並讓 bot 能在使用的頻道讀取和傳送訊息、嵌入連結及附加檔案。
-4. 在 NAS 上將 `config.toml` 的讀取權限限制給管理者和容器的 UID/GID `10001`。Compose 會將它唯讀掛載到 `/app/config.toml`。若 GHCR 套件為私有，先用 `docker login ghcr.io -u YOUR_GITHUB_USERNAME` 登入。密碼提示請貼上可讀取該套件且具 `read:packages` 權限的 classic PAT。
+以下以 `/volume1/docker/projects/` 為例。若 NAS 路徑不同，請讓 bot、私有設定和 WUD 目錄維持並列。
 
-在 NAS 部署目錄執行以下指令。上線後，可以在 Discord 試 `@機器人 2330`、`@機器人 0050 2330 6mo` 或 `@機器人 夜盤`。
+### 1. 啟動 Bot
+
+- 把 [Bot 的 Compose](../compose.yaml) 複製到 `stock-bot/compose.yaml`。
+- 把 [設定範例](../config.example.toml) 複製到 `stock-bot-private/config.toml`。填入 `[discord]` 的 bot token。要用市場快報時，再填 `[report.discord]` 的 webhook。正式設定留在 NAS，只授權管理者和容器的 UID/GID `10001` 讀取。
+- 在 Discord Developer Portal 啟用 **Message Content Intent**，並給 bot 所用頻道讀取、發送訊息、嵌入連結和附加檔案的權限。
+
+若映像是私有的，先參考 [GHCR 私有映像](#ghcr-私有映像)。接著在 NAS 啟動 bot。
 
 ```sh
-docker compose config --quiet
-docker compose pull stock-bot
-docker compose up -d stock-bot
-docker compose logs --tail 50 stock-bot
+cd /volume1/docker/projects/stock-bot
+sudo docker compose config --quiet &&
+sudo docker compose pull stock-bot &&
+sudo docker compose up -d stock-bot
+sudo docker compose logs --tail 50 stock-bot
 ```
 
-若 NAS 已用舊版 Compose 啟動 `bot` 服務，先用舊的 `compose.yaml` 執行 `docker compose stop bot` 和 `docker compose rm -f bot`。再換上新版 Compose，從原本的專案目錄以同一個 Compose 專案名稱啟動 `stock-bot`，即可沿用 `night-data` 資料卷和原有映像。
+到 Discord 試 `@機器人 2330`，確認 bot 能回圖。如果日誌出現 DNS 或連線錯誤，先看 [NAS 容器無法連外](#nas-容器無法連外)。
+
+### 2. 啟動 WUD
+
+在 NAS 建立 `/volume1/docker/projects/wud/`，並依下表準備檔案。
+
+| 從 repo 取得 | 在 WUD 目錄的檔名 | 用途 |
+| --- | --- | --- |
+| [WUD Compose](../deploy/wud/compose.yaml) | `compose.yaml` | 啟動背景監看和自動更新 |
+| [環境變數範例](../deploy/wud/.env.example) | `.env` | 填 bot 路徑和 WUD 管理員帳密 |
+| [單次更新腳本](../deploy/wud/check-and-update.sh) | `check-and-update.sh` | 選用，從終端機立即檢查 |
+
+在 WUD 的 `.env` 填入下列欄位。路徑指向 bot 的部署目錄，末尾省略 `/`。填入實際密碼，並限制 `.env` 的讀取權限。WUD 即使關閉網頁，首次啟動仍需要初始化管理員。 [WUD 管理員設定](https://getwud.app/docs/configuration/authentications/)
+
+```dotenv
+STOCK_BOT_COMPOSE_DIR=/volume1/docker/projects/stock-bot
+WUD_AUTH_ADMIN_USER=admin
+WUD_AUTH_ADMIN_PASSWORD=
+```
+
+範本透過 Docker socket 更新 bot，並掛入 `stock-bot/` 以讀寫 Compose。含 Discord 憑證的 `stock-bot-private/` 留在旁邊。若這台 NAS 也需要替 WUD 指定 bridge 或 DNS，啟動前先建立 [WUD 的本機覆寫檔](#nas-容器無法連外)。若 bot 使用私有映像，也先完成 [WUD 的 GHCR 認證](#ghcr-私有映像)。
+
+```sh
+cd /volume1/docker/projects/wud
+sudo docker compose config --quiet && sudo docker compose up -d wud
+sudo docker compose logs --tail 50 wud
+```
+
+確認日誌顯示 WUD 已啟動並能檢查 `stock-bot`。網頁和 HTTP API 預設關閉。等下次正常發版，再驗證 WUD 能自動重建 bot，並確認 Discord 能回圖、尚未到期的夜盤樣本仍在。 [WUD Compose 更新文件](https://getwud.app/docs/configuration/triggers/docker-compose/)
+
+## 平常怎麼用
+
+| 要做什麼 | 在哪裡操作 |
+| --- | --- |
+| 發布新映像 | 在電腦上[建立 Release 草稿](#發布新版本)，到 GitHub 確認並發布。 |
+| 等待自動更新 | WUD 每小時整點檢查。想換頻率，見[自訂 WUD 排程](#自訂-wud-排程)。 |
+| 立刻檢查並更新 | 在 NAS 執行 `sudo sh /volume1/docker/projects/wud/check-and-update.sh`。沿用 WUD 的自動更新設定，有新映像就會重建 bot。 |
+| 查看日誌 | 在各自的 NAS 部署目錄執行 `sudo docker compose logs --tail 50 stock-bot` 或 `sudo docker compose logs --tail 50 wud`。 |
+| 手動跑市場快報 | 在 NAS 的 bot 目錄執行 `sudo docker compose run --rm stock-bot python -m scripts.tw_market_report --config /app/config.toml`。 |
+
+### 發布新版本
+
+1. 確認 `codex/architecture-refactor` 上要發版的 commit 已推送到 `chzhonge/stock-bot`。準備 UTF-8 Markdown 發行說明，有內容才列「新功能」「修正」「部署與升級」。第一版以本分支和原作者 `main` 的共同起點為基準，之後比較上一個正式 tag。
+2. 用 `gh auth login --hostname github.com --web` 登入 GitHub CLI，再從 repo 根目錄執行下方指令。將版本號、摘要和發行說明路徑換成這一版的值。[腳本](../tools/release_draft.py) 會用 `stock-bot v<版本號> - <本版重點>` 建立草稿並印出網址。
+
+   ```sh
+   python tools/release_draft.py 1.0.1 --summary "本版重點" --notes-file release-notes.md
+   ```
+
+3. 到 GitHub 確認草稿的標題、說明和目標 commit，再按 **Publish release**。到 **Actions** 確認建置和兩個指令入口的檢查已通過。成功後，GHCR 會有 Release tag 和 `latest`，兩者指向同一份 `linux/amd64` 映像。
+
+### 本機操作與設定
+
+在本機安裝 uv，於 repo 根目錄放置 `config.toml`。先執行 `uv sync --locked` 安裝依賴，再依需要啟動 bot 或快報。
+
+- 用 `uv run --locked stock-chart-bot --config config.toml` 啟動 bot。
+- 用 `uv run --locked python -m scripts.tw_market_report --config config.toml` 手動跑快報。
+
+快報會在台灣上班日透過 webhook 發送。行事曆無法查詢時會繼續執行。
+
+- **查詢別名**在 `config.toml` 的 `[aliases]` 設定，以股票代碼或 `night` 為目標。格式見[設定範例](../config.example.toml)。
+- **快報股票清單**在 [快報腳本](../scripts/tw_market_report.py) 的 `WATCHLIST`。上市用 `tse`，上櫃用 `otc`。NAS 要用新清單時，請發布新映像。
+- **夜盤樣本**預設是設定檔旁的 `data/night-samples.jsonl`。NAS 的 `/app/data` 對應 `night-data` 資料卷。若自訂 `night.sample_file`，請讓 NAS 上的樣本繼續存在該資料卷內。
+
+## 有問題才看
 
 ### NAS 容器無法連外
 
-若 NAS 本身能解析 `discord.com`，但容器查 DNS 失敗、直接連外部 IP 的 TCP 443 也逾時，先查 NAS 的轉送防火牆是否放行 Compose 專用網路的子網。單獨指定 `dns` 只會改變查詢對象，容器仍會使用原來的網路。
+若 NAS 能解析 `discord.com`，但容器查 DNS 失敗，直接連外部 IP 的 TCP 443 也逾時，請查 NAS 的轉送防火牆是否放行 Compose 專用網路。單獨指定 `dns` 只會改變查詢對象。
 
-可在 NAS 防火牆放行該子網所需的 DNS 和出站 HTTPS。若防火牆已放行 Docker 內建的 `bridge`，也可用下方的本機覆寫檔改走這個網路。 [Docker 網路文件](https://docs.docker.com/compose/how-tos/networking/) · [Compose DNS 設定](https://docs.docker.com/reference/compose-file/services/#dns)
-
-### NAS 本機網路覆寫
-
-Bot 和 WUD 各有自己的部署目錄。需要改網路時，在該服務的 `compose.yaml` 旁建立 `compose.override.yaml`。平常執行 `docker compose up` 時，Compose 會自動合併同目錄的兩份檔案。重裝或搬機時，記得一起備份有使用的覆寫檔。 [Docker Compose 覆寫文件](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/)
-
-若 NAS 防火牆只放行 Docker 內建的 `bridge`，可依需要建立以下檔案。`192.0.2.53` 是範例位址，使用前請換成容器可連到的 DNS。若預設 DNS 可用，可省略 `dns`。
+可以放行該子網所需的 DNS 和出站 HTTPS。若防火牆已放行 Docker 內建的 `bridge`，也可以讓受影響的服務改走該網路。把覆寫檔放在對應服務的 `compose.yaml` 旁，Compose 會自動合併。以下的 `192.0.2.53` 是範例，請換成容器能連到的 DNS 位址。預設 DNS 可用時可省略 `dns`。 [Docker 網路文件](https://docs.docker.com/compose/how-tos/networking/) · [Compose 覆寫文件](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/)
 
 **Bot 的 `stock-bot/compose.override.yaml`**
 
@@ -52,52 +114,11 @@ services:
       - 192.0.2.53
 ```
 
-在各自的部署目錄執行 `docker compose config --quiet` 驗證設定，再用 `docker compose up -d` 套用。
+在各自的部署目錄執行 `sudo docker compose config --quiet && sudo docker compose up -d`。重裝或搬機時，記得備份有使用的覆寫檔。
 
-## 發版與更新
+### 自訂 WUD 排程
 
-### 發布映像
-
-1. 在 `codex/architecture-refactor` 分支確認要發版的 commit 已推送到 `chzhonge/stock-bot`。
-2. 準備 UTF-8 Markdown 發行說明。有內容才保留「新功能」「修正」「部署與升級」等章節。第一次發版以本分支和原作者 `main` 的共同起點為基準，之後以上一個正式 tag 為基準。
-3. 安裝 GitHub CLI 並用 `gh auth login --hostname github.com --web` 登入。在專案根目錄執行下方指令，提供本版的一句話重點和發行說明的路徑。[腳本](../tools/release_draft.py) 會確認目前 commit 已推送到 GitHub，並用 `stock-bot v<版本號> - <本版重點>` 作為草稿標題。
-
-   ```sh
-   python tools/release_draft.py 1.0.0 --summary "Discord 查詢改版與 NAS 自動部署" --notes-file release-notes.md
-   ```
-
-4. 開啟腳本印出的草稿網址，確認標題、說明和目標 commit，再按 **Publish release**。到 **Actions** 查看結果。兩個指令入口通過檢查後，同一份 `linux/amd64` 映像會以 Release tag 和 `latest` 發布到 GHCR。
-
-### 設定 WUD
-
-將 [WUD 的 Compose 範本](../deploy/wud/compose.yaml) 複製到 NAS 上獨立的 WUD 目錄，檔名保留 `compose.yaml`。例如 bot 放在 `/volume1/docker/projects/stock-bot/`，WUD 放在同一層的 `wud/`。Bot 的 Compose 和建置用的 Dockerfile 都留在 repo 根目錄。
-
-將 [WUD 的環境變數範例](../deploy/wud/.env.example) 複製到 WUD 目錄並命名為 `.env`。填入 NAS 上存放 bot 的 `compose.yaml` 的絕對目錄（末尾省略 `/`），以及 WUD 管理員的帳號和密碼。WUD 即使關閉網頁介面，首次啟動仍需要初始化管理員。正式 `.env` 只留在 NAS，並限制檔案讀取權限。
-
-```dotenv
-STOCK_BOT_COMPOSE_DIR=/volume1/docker/projects/stock-bot
-WUD_AUTH_ADMIN_USER=admin
-WUD_AUTH_ADMIN_PASSWORD=
-```
-
-請填入密碼後再啟動。若先前已在 `compose.override.yaml` 加入管理員帳密設定，將值移到 `.env`，並移除覆寫檔中的兩個帳密欄位。
-
-WUD 透過 Docker socket 管理容器。範本會掛載 bot 的部署目錄供 WUD 更新 Compose，含憑證的 `stock-bot-private/` 應留在這個目錄之外。範本關閉網頁和 HTTP API，並只監看標有 `wud.watch: "true"` 的容器。
-
-若 WUD 也需要指定 bridge 或 DNS，啟動前請參考 [NAS 本機網路覆寫](#nas-本機網路覆寫) 建立自己的覆寫檔。
-
-若映像為私有，在本機 `compose.override.yaml` 的 `wud.environment` 加入 `WUD_REGISTRY_GHCR_LOCAL_USERNAME` 和 `WUD_REGISTRY_GHCR_LOCAL_TOKEN`。在 NAS 的 WUD 目錄啟動並查看日誌。
-
-```sh
-sudo docker compose config --quiet && sudo docker compose up -d wud
-sudo docker compose logs --tail 50 -f wud
-```
-
-先確認 WUD 能正常檢查 `stock-bot`。下次正式版發布後，確認 WUD 偵測到 `latest` 的 digest 改變、容器已重建、bot 重新上線，且尚未到期的夜盤樣本仍在。
-
-#### 檢查頻率
-
-WUD 預設每小時整點檢查一次。若想每 15 分鐘檢查，在 NAS 的 `compose.override.yaml` 裡，把下方的 `environment` 合併到現有的 `wud` 服務，保留原有的網路和 DNS 設定。 [WUD 排程文件](https://getwud.app/docs/configuration/watchers/)
+若想每 15 分鐘檢查，在 NAS 的 `wud/compose.override.yaml` 合併以下設定，保留現有的網路和 DNS 欄位。存檔後在 WUD 目錄執行 `sudo docker compose up -d wud`。 [WUD 排程文件](https://getwud.app/docs/configuration/watchers/)
 
 ```yaml
 services:
@@ -106,36 +127,12 @@ services:
       WUD_WATCHER_LOCAL_CRON: "*/15 * * * *"
 ```
 
-在 WUD 目錄執行 `sudo docker compose up -d wud` 套用排程。
+### GHCR 私有映像
 
-若要立刻檢查一次，把 [check-and-update.sh](../deploy/wud/check-and-update.sh) 複製到 NAS 的 WUD 目錄，和 `compose.yaml` 放在一起，再執行：
+在 NAS 執行 `sudo docker login ghcr.io -u YOUR_GITHUB_USERNAME`，密碼使用對該套件有讀取權限、具 `read:packages` 的 classic PAT。若 WUD 也要自動更新私有映像，在 NAS 的 `wud/compose.override.yaml` 的 `services.wud.environment` 加入 `WUD_REGISTRY_GHCR_LOCAL_USERNAME` 和 `WUD_REGISTRY_GHCR_LOCAL_TOKEN`。 [WUD GHCR 認證](https://getwud.app/docs/configuration/registries/ghcr/)
 
-```sh
-sudo sh /volume1/docker/projects/wud/check-and-update.sh
-```
+### 從舊設定升級
 
-腳本沿用同目錄的 `.env` 和 `compose.override.yaml`，啟動一次性的 WUD 容器，檢查完就退出。保留範本的自動更新設定時，若發現新映像就會重建 `stock-bot`。背景執行的 WUD 會繼續依排程檢查。
-
-參考 [WUD Compose trigger](https://getwud.app/docs/configuration/triggers/docker-compose/)、[WUD 管理員初始化](https://getwud.app/docs/configuration/authentications/) 和 [WUD GHCR 認證](https://getwud.app/docs/configuration/registries/ghcr/)。
-
-## 日常操作
-
-在本機安裝 uv 後，從專案根目錄啟動 bot 或手動執行一次市場快報。
-
-```sh
-uv sync --locked
-uv run --locked stock-chart-bot --config config.toml
-uv run --locked python -m scripts.tw_market_report --config config.toml
-```
-
-NAS 上可用現有映像手動執行快報。快報在台灣上班日發送。若行事曆來源無法查詢，會繼續執行。
-
-```sh
-docker compose run --rm stock-bot python -m scripts.tw_market_report --config /app/config.toml
-```
-
-- **查詢別名**在 `config.toml` 的 `[aliases]` 調整，以股票代碼或 `night` 作為對應目標。格式可參考 [設定範例](../config.example.toml)。
-- **快報股票清單**在 [快報腳本](../scripts/tw_market_report.py) 的 `WATCHLIST` 調整。上市用 `tse`，上櫃用 `otc`。NAS 要用到新清單時，依前面的發版步驟更新映像。
-- **夜盤樣本**預設位於設定檔旁的 `data/night-samples.jsonl`。NAS 將 `/app/data` 存在 `night-data` 資料卷中。自訂 `night.sample_file` 時，請把路徑留在這個資料卷內。
-
-若從舊版升級，將 `[report.index]`、`[[report.quotes]]` 或 `[[report.watchlist]]` 的自訂內容移到快報腳本，再從 TOML 移除這些舊區段。
+- 若舊 Compose 的服務名是 `bot`，先用舊檔執行 `sudo docker compose stop bot` 和 `sudo docker compose rm -f bot`，再換新版。沿用原本的 Compose 專案目錄和專案名稱，可繼續使用 `night-data`。
+- 若 bot 的 `config.toml` 原先放在部署目錄內，把它移到旁邊的 `stock-bot-private/`，再套用新版 Compose。舊的 `[report.index]`、`[[report.quotes]]` 和 `[[report.watchlist]]` 自訂內容移到快報腳本後，再從 TOML 移除。
+- 若 WUD 管理員帳密原先放在 WUD 的覆寫檔，把值移到同目錄的 `.env`，再刪除覆寫檔裡的兩個帳密欄位。
