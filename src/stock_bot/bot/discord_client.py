@@ -6,6 +6,7 @@ import logging
 import discord
 from discord.ext import tasks
 
+from stock_bot.charts import trend_color
 from stock_bot.market.night import TAIWAN_TZ
 
 
@@ -89,16 +90,14 @@ class StockChartBot(discord.Client):
     async def reply_with_chart(self, message, reply_type, snapshot, image):
         if reply_type == "night":
             file_name = "tx_night_session.png"
-            source_label = "Yahoo WTX&" if snapshot.get("source") == "yahoo" else "TAIFEX 期交所夜盤行情"
             change = snapshot["change_amount"]
             percent = snapshot["change_percent"]
             trend = f"漲跌 `{change:+.0f}`  漲跌幅 `{percent:+.2f}%`" if change is not None and percent is not None else "漲跌資料未提供"
             embed = discord.Embed(
                 title=f"TX 夜盤 {snapshot['contract']}",
                 description=f"最新 `{snapshot['last_price']:,.0f}`  {trend}",
-                color=0x18A95D if change is not None and change < 0 else 0xE35358 if change else 0x94A3B8,
+                color=discord.Colour.from_str(trend_color(change)),
             )
-            embed.set_footer(text=f"資料來源 {source_label}")
         elif reply_type == "history":
             series = snapshot["series"]
             period = snapshot["period"]
@@ -109,14 +108,14 @@ class StockChartBot(discord.Client):
             lines = [f"`{dates[0]:%Y-%m-%d}` 至 `{dates[-1]:%Y-%m-%d}`"]
             if comparison:
                 lines.extend(f"**{code}** `{values.iloc[-1]:+.2f}%`" for code, values in series.items())
-                footer = "Yahoo Finance · 共同交易日 · 調整後收盤價報酬率（各標的原幣）"
+                lines.append("共同交易日 · 調整後收盤價報酬率（各標的原幣）")
+                color = discord.Colour.from_str(trend_color(None))
             else:
                 values = next(iter(series.values()))
                 change = (values.iloc[-1] / values.iloc[0] - 1) * 100
                 lines.append(f"最新調整後收盤價 `{values.iloc[-1]:,.2f}`  區間漲跌 `{change:+.2f}%`")
-                footer = "Yahoo Finance · 日線 · 調整後收盤價"
-            embed = discord.Embed(title=title, description="\n".join(lines), color=0x2458A6)
-            embed.set_footer(text=footer)
+                color = discord.Colour.from_str(trend_color(change))
+            embed = discord.Embed(title=title, description="\n".join(lines), color=color)
         else:
             file_name = f"{snapshot['code']}_intraday.png"
             embed = discord.Embed(
@@ -126,9 +125,8 @@ class StockChartBot(discord.Client):
                     f"漲跌 `{snapshot['change_amount']:+.2f}`  "
                     f"漲跌幅 `{snapshot['change_percent']:+.2f}%`"
                 ),
-                color=0x138A5C if snapshot["change_amount"] >= 0 else 0xD64045,
+                color=discord.Colour.from_str(trend_color(snapshot["change_amount"])),
             )
-            embed.set_footer(text=f"資料來源 Yahoo Finance | 代碼 {snapshot['symbol']}")
         embed.set_image(url=f"attachment://{file_name}")
 
         with io.BytesIO(image) as buffer:

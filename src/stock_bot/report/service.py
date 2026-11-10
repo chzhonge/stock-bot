@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 
-from stock_bot.charts import build_taiex_chart
+from stock_bot.charts import build_taiex_chart, trend_color
 
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ class MarketReportService:
             "allowed_mentions": {"parse": [], "users": [mention_user_id] if mention_user_id else []},
             "embeds": [{
                 "title": f"{index_label}走勢圖",
-                "color": 3066993 if index["change_amount"] >= 0 else 15158332,
+                "color": int(trend_color(index["change_amount"])[1:], 16),
                 "image": {"url": f"attachment://{CHART_FILENAME}"},
                 "fields": fields,
             }],
@@ -67,7 +67,6 @@ class MarketReportService:
         chart = build_taiex_chart(
             index["session"],
             index["previous_close"],
-            symbol=index_symbol,
             title=chart_title,
         )
         self.notifier.send(payload, chart, CHART_FILENAME)
