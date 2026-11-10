@@ -75,6 +75,14 @@ sudo docker compose logs --tail 50 -f wud
 
 先確認 WUD 能正常檢查 `stock-bot`。下次正式版發布後，確認 WUD 偵測到 `latest` 的 digest 改變、容器已重建、bot 重新上線，且尚未到期的夜盤樣本仍在。
 
+若要立刻檢查一次，把 [check-and-update.sh](../deploy/wud/check-and-update.sh) 複製到 NAS 的 WUD 目錄，和 `compose.yaml` 放在一起，再執行：
+
+```sh
+sudo sh /volume1/docker/projects/wud/check-and-update.sh
+```
+
+腳本沿用同目錄的 `.env` 和 `compose.override.yaml`，啟動一次性的 WUD 容器，檢查完就退出。保留範本的自動更新設定時，若發現新映像就會重建 `stock-bot`。背景執行的 WUD 會繼續依排程檢查。
+
 參考 [WUD Compose trigger](https://getwud.app/docs/configuration/triggers/docker-compose/)、[WUD 管理員初始化](https://getwud.app/docs/configuration/authentications/) 和 [WUD GHCR 認證](https://getwud.app/docs/configuration/registries/ghcr/)。
 
 ## 日常操作
