@@ -13,10 +13,12 @@ Discord bot 提供股票與夜盤查詢。市場快報是可手動執行的一�
 
 ```sh
 docker compose config --quiet
-docker compose pull bot
-docker compose up -d bot
-docker compose logs --tail 50 bot
+docker compose pull stock-bot
+docker compose up -d stock-bot
+docker compose logs --tail 50 stock-bot
 ```
+
+若 NAS 已用舊版 Compose 啟動 `bot` 服務，先用舊的 `compose.yaml` 執行 `docker compose stop bot` 和 `docker compose rm -f bot`。再換上新版 Compose，從原本的專案目錄以同一個 Compose 專案名稱啟動 `stock-bot`，即可沿用 `night-data` 資料卷和原有映像。
 
 ## 發版與更新
 
@@ -46,7 +48,7 @@ environment:
   WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_AUTO: "true"
 ```
 
-若套件為私有，在 WUD 設定 `WUD_REGISTRY_GHCR_LOCAL_USERNAME` 和 `WUD_REGISTRY_GHCR_LOCAL_TOKEN`。套用後確認 WUD 看得到 `bot`。下次正式版發布後，確認 WUD 偵測到 `latest` 的 digest 改變、容器已重建、bot 重新上線，且尚未到期的夜盤樣本仍在。想先從 WUD 介面手動觸發，可把 `AUTO` 設成 `"false"`。
+若套件為私有，在 WUD 設定 `WUD_REGISTRY_GHCR_LOCAL_USERNAME` 和 `WUD_REGISTRY_GHCR_LOCAL_TOKEN`。套用後確認 WUD 看得到 `stock-bot` 服務的容器。下次正式版發布後，確認 WUD 偵測到 `latest` 的 digest 改變、容器已重建、bot 重新上線，且尚未到期的夜盤樣本仍在。想先從 WUD 介面手動觸發，可把 `AUTO` 設成 `"false"`。
 
 參考 [WUD Compose trigger](https://getwud.app/docs/configuration/triggers/docker-compose/) 和 [WUD GHCR 認證](https://getwud.app/docs/configuration/registries/ghcr/)。
 
@@ -63,7 +65,7 @@ uv run --locked python -m scripts.tw_market_report --config config.toml
 NAS 上可用現有映像手動執行快報。快報在台灣上班日發送。若行事曆來源無法查詢，會繼續執行。
 
 ```sh
-docker compose run --rm bot python -m scripts.tw_market_report --config /app/config.toml
+docker compose run --rm stock-bot python -m scripts.tw_market_report --config /app/config.toml
 ```
 
 - **查詢別名**在 `config.toml` 的 `[aliases]` 調整，以股票代碼或 `night` 作為對應目標。格式可參考 [設定範例](../config.example.toml)。

@@ -1,5 +1,5 @@
 services:
-  bot:
+  stock-bot:
     image: ghcr.io/chzhonge/stock-bot:latest
     restart: unless-stopped
     volumes:
