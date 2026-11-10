@@ -1,4 +1,5 @@
 from io import BytesIO
+from zoneinfo import ZoneInfo
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.dates import AutoDateLocator, ConciseDateFormatter
@@ -11,6 +12,7 @@ MUTED = "#94a3b8"
 FOREGROUND = "#f8fafc"
 REFERENCE = "#489dce"
 PALETTE = ("#62a5ed", "#f19966", "#54c7a3", "#c291ec", "#e6c46a")
+TAIPEI_TIME = ZoneInfo("Asia/Taipei")
 
 
 def figure_png(figure):
@@ -83,10 +85,24 @@ def price_line(ax, times, prices, *, previous, baseline, color, decimals):
     ax.margins(x=0.05, y=0.10)
 
 
-def intraday_ticks(ax, times):
-    step = max(1, (len(times) + 7) // 8)
-    ticks = times[::step]
-    ax.set_xticks(ticks, [time.strftime("%H:%M") for time in ticks])
+def intraday_ticks(fig, ax, times):
+    by_minute = {time.strftime("%H:%M"): time for time in times}
+    labels = list(by_minute)
+    count = min(8, len(labels))
+    indices = [round(i * (len(labels) - 1) / (count - 1)) for i in range(count)] if count > 1 else range(count)
+    selected = [labels[i] for i in indices]
+    ax.set_xticks([by_minute[label] for label in selected], selected)
+    if times:
+        latest = times[-1]
+        zone = str(latest.tzinfo)
+        if zone in {"America/New_York", "US/Eastern"}:
+            label = "ET"
+        elif zone == "Asia/Taipei":
+            label = "Taipei time"
+        else:
+            label = latest.tzname()
+        if label:
+            fig.text(0.94, 0.785, f"Time axis: {label}", ha="right", fontsize=8, color=MUTED)
 
 
 def history_ticks(ax):
@@ -96,7 +112,13 @@ def history_ticks(ax):
 
 
 def updated_footer(fig, timestamp):
-    fig.text(0.94, 0.024, f"Updated {timestamp}", ha="right", fontsize=8, color=MUTED)
+    label = timestamp
+    if not isinstance(timestamp, str):
+        if timestamp.utcoffset() is not None:
+            label = timestamp.astimezone(TAIPEI_TIME).strftime("%Y-%m-%d %H:%M Taipei")
+        else:
+            label = timestamp.strftime("%Y-%m-%d %H:%M")
+    fig.text(0.94, 0.024, f"Updated {label}", ha="right", fontsize=8, color=MUTED)
 
 
 def build_session_chart(session, previous, title, decimals):
@@ -115,8 +137,8 @@ def build_session_chart(session, previous, title, decimals):
     )])
     price_line(ax, times, prices, previous=previous, baseline=previous,
                color=trend_color(change), decimals=decimals)
-    intraday_ticks(ax, times)
-    updated_footer(fig, times[-1].strftime("%Y-%m-%d %H:%M"))
+    intraday_ticks(fig, ax, times)
+    updated_footer(fig, times[-1])
     return figure_png(fig)
 
 
@@ -187,11 +209,10 @@ def build_night_chart(snapshot, bars):
 
     price_line(ax, times, prices, previous=previous, baseline=snapshot.get("open_price"),
                color=color, decimals=0)
-    intraday_ticks(time_ax, times)
+    intraday_ticks(fig, time_ax, times)
     headline(fig, last, change, percent, 0)
     metrics(fig, [(label, price_text(snapshot.get(key), 0), FOREGROUND)
                   for label, key in (("OPEN", "open_price"), ("HIGH", "high_price"),
                                      ("LOW", "low_price"), ("VOLUME", "volume"))])
-    updated = updated_at.strftime("%Y-%m-%d %H:%M") if updated_at else snapshot["report_date"]
-    updated_footer(fig, updated)
+    updated_footer(fig, updated_at or snapshot["report_date"])
     return figure_png(fig)
