@@ -20,6 +20,12 @@ docker compose logs --tail 50 stock-bot
 
 若 NAS 已用舊版 Compose 啟動 `bot` 服務，先用舊的 `compose.yaml` 執行 `docker compose stop bot` 和 `docker compose rm -f bot`。再換上新版 Compose，從原本的專案目錄以同一個 Compose 專案名稱啟動 `stock-bot`，即可沿用 `night-data` 資料卷和原有映像。
 
+### NAS 容器無法連外
+
+若 NAS 本身能解析 `discord.com`，但容器查 DNS 失敗、直接連外部 IP 的 TCP 443 也逾時，先查 NAS 的轉送防火牆是否放行 Compose 專用網路的子網。單獨指定 `dns` 只會改變查詢對象，容器仍會使用原來的網路。
+
+可在 NAS 防火牆放行該子網所需的 DNS 和出站 HTTPS。若防火牆已放行 Docker 內建的 `bridge`，也可在 NAS 本機的 `stock-bot` 服務設定 `network_mode: bridge`，並視需要用 `dns` 指定容器可連到的 DNS 伺服器。將這些環境專用的設定留在 WUD 讀取的 NAS Compose 檔。 [Docker 網路文件](https://docs.docker.com/compose/how-tos/networking/) · [Compose DNS 設定](https://docs.docker.com/reference/compose-file/services/#dns)
+
 ## 發版與更新
 
 ### 發布映像
