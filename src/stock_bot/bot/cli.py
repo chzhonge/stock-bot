@@ -25,7 +25,7 @@ def main():
     service = StockChartService(
         repository,
         queue_size=config.queue_size,
-        night_aliases=config.night_aliases,
+        aliases=config.aliases,
     )
     StockChartBot(
         service,

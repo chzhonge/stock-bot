@@ -16,7 +16,7 @@ class BotConfig:
     sample_file: Path
     yahoo_night_url: str
     taifex_night_url: str
-    night_aliases: frozenset[str]
+    aliases: dict[str, str]
 
 
 def read_toml(path: Path):
@@ -56,6 +56,7 @@ def required_url(section, key, prefix, *, base=False):
 def load_config(path: Path) -> BotConfig:
     config = read_toml(path)
     config.pop("report", None)
+    configured_aliases = config.pop("aliases", {})
     validate_sections(config, {
         "discord": {"token", "nickname"},
         "quotes": {"queue_size", "request_timeout_seconds", "query_timeout_seconds"},
@@ -88,11 +89,27 @@ def load_config(path: Path) -> BotConfig:
     if sample_path.is_dir():
         raise ValueError("night.sample_file 必須指向檔案")
 
-    aliases = night.get("aliases")
-    if not isinstance(aliases, list) or not aliases or any(
-        not isinstance(alias, str) or not alias.strip() for alias in aliases
+    legacy_aliases = night.get("aliases", [])
+    if not isinstance(legacy_aliases, list) or any(
+        not isinstance(alias, str) or not alias.strip() for alias in legacy_aliases
     ):
-        raise ValueError("night.aliases 必須是非空文字清單")
+        raise ValueError("night.aliases 必須是文字清單")
+    if not isinstance(configured_aliases, dict):
+        raise ValueError("[aliases] 必須是查詢目標與別名清單的對照表")
+    aliases = {}
+    for target, names in configured_aliases.items():
+        target = target.strip()
+        if not target or not isinstance(names, list) or not names:
+            raise ValueError("[aliases] 的每個查詢目標都必須有一組別名清單")
+        for alias in names:
+            if not isinstance(alias, str) or not alias.strip():
+                raise ValueError("[aliases] 的別名必須是非空文字")
+            key = alias.strip().casefold()
+            if key in aliases:
+                raise ValueError("[aliases] 含有重複的別名（忽略大小寫和前後空白）")
+            aliases[key] = target
+    for alias in legacy_aliases:
+        aliases.setdefault(alias.strip().casefold(), "night")
 
     return BotConfig(
         token=token.strip(),
@@ -103,7 +120,7 @@ def load_config(path: Path) -> BotConfig:
         sample_file=sample_path,
         yahoo_night_url=required_url(night, "yahoo_url", "night"),
         taifex_night_url=required_url(night, "taifex_url", "night"),
-        night_aliases=frozenset(alias.strip().lower() for alias in aliases),
+        aliases=aliases,
     )
 
 

@@ -16,7 +16,8 @@ uv sync --locked
 | --- | --- |
 | `[discord]` | 常駐 bot 的 token 和顯示暱稱 |
 | `[quotes]` | 等待佇列容量、行情請求逾時和查詢期限 |
-| `[night]` | Yahoo 與期交所夜盤網址、查詢別名和樣本檔路徑 |
+| `[night]` | Yahoo 與期交所夜盤網址和樣本檔路徑 |
+| `[aliases]` | 自訂查詢別名，可直接對應股票代碼或夜盤 |
 | `[report.discord]` | 快報 webhook 和可選的通知對象 ID |
 | `[report.sources]` | 快報使用的證交所、CNN 和台灣行事曆網址 |
 
@@ -33,6 +34,18 @@ uv run --locked python main.py --config config.toml
 也可以用 `uv run --locked stock-chart-bot --config config.toml` 啟動同一支 bot。上線後，在 Discord 傳送 `@機器人 2330`、`@機器人 0050`、`@機器人 AAPL` 或 `@機器人 夜盤`。
 
 Bot 一次只處理一筆取價。預設最多 4 筆等待，取價、繪圖和回覆中的查詢合計最多 5 筆。達到任一上限就回覆忙碌。排隊和取價共用 30 秒期限。圖表直接產生 PNG 附件。
+
+在 `[aliases]` 中以查詢目標當 key，`night` 代表夜盤。每個別名獨佔一行並保留尾端逗號，新增或移除時 Git diff 會直接顯示變動的那一行。
+
+```toml
+[aliases]
+2330 = [
+    "台積電",
+    "TSMC",
+]
+```
+
+代碼含點號時，請用引號包住整個 key，例如 `"BRK.B"`。別名忽略大小寫和前後空白，且不能重複。舊的 `night.aliases` 仍可讀取，同名時以 `[aliases]` 為準。
 
 ### 夜盤樣本
 

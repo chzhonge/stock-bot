@@ -11,9 +11,9 @@ YAHOO_COOLDOWN_SECONDS = 30
 
 
 class StockChartService:
-    def __init__(self, repository, *, queue_size, night_aliases):
+    def __init__(self, repository, *, queue_size, aliases):
         self.repository = repository
-        self.night_aliases = night_aliases
+        self.aliases = aliases
         self.quote_queue = asyncio.Queue(maxsize=queue_size)
         self.max_in_flight = queue_size + 1
         self.in_flight = 0
@@ -57,13 +57,14 @@ class StockChartService:
                 if result.done() or loop.time() >= deadline:
                     continue
 
-                if user_input.strip().lower() in self.night_aliases:
+                target = self.aliases.get(user_input.strip().casefold())
+                if target is not None and target.casefold() == "night":
                     data, candles = await self.collect_night_quote(include_candles=True)
                     reply = ("night", data, candles)
                 else:
                     if loop.time() < yahoo_retry_at:
                         raise ValueError("Yahoo Finance 暫時限制查詢，請稍後再試")
-                    data = await asyncio.to_thread(self.repository.fetch_stock, user_input)
+                    data = await asyncio.to_thread(self.repository.fetch_stock, target or user_input)
                     reply = ("stock", data, None)
                 if not result.done():
                     result.set_result(reply)

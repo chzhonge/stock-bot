@@ -11,7 +11,32 @@ query_timeout_seconds = 30
 sample_file = "data/night-samples.jsonl"
 yahoo_url = "https://tw.stock.yahoo.com/quote/WTX%26"
 taifex_url = "https://www.taifex.com.tw/cht/3/futDailyMarketExcel?commodity_id=TX&marketCode=1"
-aliases = ["夜盤", "台指夜盤", "台指", "tx", "txf", "txf1", "wtxp", "wtxp&"]
+
+[aliases]
+night = [
+    "夜盤",
+    "台指夜盤",
+    "台指",
+    "tx",
+    "txf",
+    "txf1",
+    "wtxp",
+    "wtxp&",
+]
+
+2330 = [
+    "台積電",
+    "TSMC",
+]
+
+0050 = [
+    "元大台灣50",
+]
+
+AAPL = [
+    "蘋果",
+    "Apple",
+]
 
 [report.discord]
 webhook_url = ""
