@@ -4,17 +4,17 @@
 
 先讓 Discord bot 跑起來，再安裝 WUD 自動更新。Bot 需要已發布的 `ghcr.io/chzhonge/stock-bot:latest`。如果 GHCR 上還沒有映像，先依[發版步驟](#發布新版本)發布第一版。
 
-以下以 `/volume1/docker/projects/` 為例。若 NAS 路徑不同，請讓 bot、私有設定和 WUD 目錄維持並列。
+以下指令中的 `/path/to/projects` 請換成 NAS 的實際部署路徑。`stock-bot/`、`stock-bot-private/` 和 `wud/` 放在同一層。
 
 ### 1. 啟動 Bot
 
 1. **放置 Compose 檔。** 把 [Bot 的 Compose](../compose.yaml) 複製到 `stock-bot/compose.yaml`。
-2. **準備 Bot 設定。** 把 [設定範例](../config.example.toml) 複製到 `stock-bot-private/config.toml`。填入 `[discord]` 的 bot token。要用市場快報時，再填 `[report.discord]` 的 webhook。正式設定留在 NAS，只授權管理者和容器的 UID/GID `10001` 讀取。
+2. **準備 Bot 設定。** 把 [設定範例](../config.example.toml) 複製到 `stock-bot-private/config.toml`，填入 `[discord]` 的 bot token。市場快報才需要 `[report.discord]` 的 webhook。正式設定留在 NAS，讀取權限限於管理者和容器的 UID/GID `10001`。
 3. **設定 Discord 權限。** 在 Discord Developer Portal 啟用 **Message Content Intent**，並給 bot 所用頻道讀取、發送訊息、嵌入連結和附加檔案的權限。
 4. **啟動並驗證。** 若映像是私有的，先參考 [GHCR 私有映像](#ghcr-私有映像)。接著在 NAS 執行下列指令。
 
    ```sh
-   cd /volume1/docker/projects/stock-bot
+   cd /path/to/projects/stock-bot
    sudo docker compose config --quiet &&
    sudo docker compose pull stock-bot &&
    sudo docker compose up -d stock-bot
@@ -25,7 +25,7 @@
 
 ### 2. 啟動 WUD
 
-在 NAS 建立 `/volume1/docker/projects/wud/`，並依下表準備檔案。
+在 NAS 的部署路徑下建立 `wud/`，並依下表準備檔案。
 
 | 從 repo 取得 | 在 WUD 目錄的檔名 | 用途 |
 | --- | --- | --- |
@@ -36,7 +36,7 @@
 在 WUD 的 `.env` 填入下列欄位。路徑指向 bot 的部署目錄，末尾省略 `/`。填入實際密碼，並限制 `.env` 的讀取權限。WUD 即使關閉網頁，首次啟動仍需要初始化管理員。 [WUD 管理員設定](https://getwud.app/docs/configuration/authentications/)
 
 ```dotenv
-STOCK_BOT_COMPOSE_DIR=/volume1/docker/projects/stock-bot
+STOCK_BOT_COMPOSE_DIR=/path/to/projects/stock-bot
 WUD_AUTH_ADMIN_USER=admin
 WUD_AUTH_ADMIN_PASSWORD=
 ```
@@ -44,7 +44,7 @@ WUD_AUTH_ADMIN_PASSWORD=
 範本透過 Docker socket 更新 bot，並掛入 `stock-bot/` 以讀寫 Compose。含 Discord 憑證的 `stock-bot-private/` 留在旁邊。若這台 NAS 也需要替 WUD 指定 bridge 或 DNS，啟動前先建立 [WUD 的本機覆寫檔](#nas-容器無法連外)。若 bot 使用私有映像，也先完成 [WUD 的 GHCR 認證](#ghcr-私有映像)。
 
 ```sh
-cd /volume1/docker/projects/wud
+cd /path/to/projects/wud
 sudo docker compose config --quiet && sudo docker compose up -d wud
 sudo docker compose logs --tail 50 wud
 ```
@@ -57,7 +57,7 @@ sudo docker compose logs --tail 50 wud
 | --- | --- |
 | 發布新映像 | 在電腦上[建立 Release 草稿](#發布新版本)，到 GitHub 確認並發布。 |
 | 等待自動更新 | WUD 每小時整點檢查。想換頻率，見[自訂 WUD 排程](#自訂-wud-排程)。 |
-| 立刻檢查並更新 | 在 NAS 執行 `sudo sh /volume1/docker/projects/wud/check-and-update.sh`。沿用 WUD 的自動更新設定，有新映像就會重建 bot。 |
+| 立刻檢查並更新 | 在 NAS 的 WUD 目錄執行 `sudo sh ./check-and-update.sh`。有新映像就會重建 bot。 |
 | 查看日誌 | 在各自的 NAS 部署目錄執行 `sudo docker compose logs --tail 50 stock-bot` 或 `sudo docker compose logs --tail 50 wud`。 |
 | 手動跑市場快報 | 在 NAS 的 bot 目錄執行 `sudo docker compose run --rm stock-bot python -m scripts.tw_market_report --config /app/config.toml`。 |
 
@@ -91,29 +91,14 @@ sudo docker compose logs --tail 50 wud
 
 若 NAS 能解析 `discord.com`，但容器查 DNS 失敗，直接連外部 IP 的 TCP 443 也逾時，請查 NAS 的轉送防火牆是否放行 Compose 專用網路。單獨指定 `dns` 只會改變查詢對象。
 
-可以放行該子網所需的 DNS 和出站 HTTPS。若防火牆已放行 Docker 內建的 `bridge`，也可以讓受影響的服務改走該網路。把覆寫檔放在對應服務的 `compose.yaml` 旁，Compose 會自動合併。以下的 `192.0.2.53` 是範例，請換成容器能連到的 DNS 位址。預設 DNS 可用時可省略 `dns`。 [Docker 網路文件](https://docs.docker.com/compose/how-tos/networking/) · [Compose 覆寫文件](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/)
+可以放行該子網的 DNS 和出站 HTTPS。若 NAS 已放行 Docker 內建的 `bridge`，也可在對應的覆寫檔設定 `network_mode: bridge`。只有容器需要指定 DNS 時，才加上 `dns` 並填入該 NAS 環境可用的位址。 [Docker 網路文件](https://docs.docker.com/compose/how-tos/networking/) · [Compose DNS 設定](https://docs.docker.com/reference/compose-file/services/#dns)
 
-**Bot 的 `stock-bot/compose.override.yaml`**
+| 服務 | NAS 本機覆寫檔 | 設定位置 |
+| --- | --- | --- |
+| Bot | `stock-bot/compose.override.yaml` | `services.stock-bot` |
+| WUD | `wud/compose.override.yaml` | `services.wud` |
 
-```yaml
-services:
-  stock-bot:
-    network_mode: bridge
-    dns:
-      - 192.0.2.53
-```
-
-**WUD 的 `wud/compose.override.yaml`**
-
-```yaml
-services:
-  wud:
-    network_mode: bridge
-    dns:
-      - 192.0.2.53
-```
-
-在各自的部署目錄執行 `sudo docker compose config --quiet && sudo docker compose up -d`。重裝或搬機時，記得備份有使用的覆寫檔。
+覆寫檔放在各自的 `compose.yaml` 旁。從該目錄執行 `sudo docker compose config --quiet && sudo docker compose up -d`，Compose 就會合併設定並套用。實際 DNS、檔案權限做法和防火牆規則可記在自己的 NAS 筆記，重裝時一起還原本機覆寫檔。 [Compose 覆寫文件](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/)
 
 ### 自訂 WUD 排程
 
