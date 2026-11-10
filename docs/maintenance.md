@@ -4,14 +4,14 @@
 
 先讓 Discord bot 跑起來，再安裝 WUD 自動更新。Bot 需要已發布的 `ghcr.io/chzhonge/stock-bot:latest`。如果 GHCR 上還沒有映像，先依[發版步驟](#發布新版本)發布第一版。
 
-以下指令中的 `/path/to/projects` 請換成 NAS 的實際部署路徑。`stock-bot/`、`stock-bot-private/` 和 `wud/` 放在同一層。
+以下指令中的 `/path/to/projects` 請換成 Docker 主機的實際部署路徑。`stock-bot/`、`stock-bot-private/` 和 `wud/` 放在同一層。
 
 ### 1. 啟動 Bot
 
 1. **放置 Compose 檔。** 把 [Bot 的 Compose](../compose.yaml) 複製到 `stock-bot/compose.yaml`。
-2. **準備 Bot 設定。** 把 [設定範例](../config.example.toml) 複製到 `stock-bot-private/config.toml`，填入 `[discord]` 的 bot token。市場快報才需要 `[report.discord]` 的 webhook。正式設定留在 NAS，讀取權限限於管理者和容器的 UID/GID `10001`。
+2. **準備 Bot 設定。** 把 [設定範例](../config.example.toml) 複製到 `stock-bot-private/config.toml`，填入 `[discord]` 的 bot token。市場快報才需要 `[report.discord]` 的 webhook。正式設定留在 Docker 主機，讀取權限限於管理者和容器的 UID/GID `10001`。
 3. **設定 Discord 權限。** 在 Discord Developer Portal 啟用 **Message Content Intent**，並給 bot 所用頻道讀取、發送訊息、嵌入連結和附加檔案的權限。
-4. **啟動並驗證。** 若映像是私有的，先參考 [GHCR 私有映像](#ghcr-私有映像)。接著在 NAS 執行下列指令。
+4. **啟動並驗證。** 若映像是私有的，先參考 [GHCR 私有映像](#ghcr-私有映像)。接著在 Docker 主機執行下列指令。
 
    ```sh
    cd /path/to/projects/stock-bot
@@ -21,11 +21,11 @@
    sudo docker compose logs --tail 50 stock-bot
    ```
 
-   到 Discord 試 `@機器人 2330`，確認 bot 能回圖。如果日誌出現 DNS 或連線錯誤，先看 [NAS 容器無法連外](#nas-容器無法連外)。
+   到 Discord 試 `@機器人 2330`，確認 bot 能回圖。如果日誌出現 DNS 或連線錯誤，先看[容器無法連外](#容器無法連外)。
 
 ### 2. 啟動 WUD
 
-在 NAS 的部署路徑下建立 `wud/`，並依下表準備檔案。
+在 Docker 主機的部署路徑下建立 `wud/`，並依下表準備檔案。
 
 | 從 repo 取得 | 在 WUD 目錄的檔名 | 用途 |
 | --- | --- | --- |
@@ -41,7 +41,7 @@ WUD_AUTH_ADMIN_USER=admin
 WUD_AUTH_ADMIN_PASSWORD=
 ```
 
-範本透過 Docker socket 更新 bot，並掛入 `stock-bot/` 以讀寫 Compose。含 Discord 憑證的 `stock-bot-private/` 留在旁邊。若這台 NAS 也需要替 WUD 指定 bridge 或 DNS，啟動前先建立 [WUD 的本機覆寫檔](#nas-容器無法連外)。若 bot 使用私有映像，也先完成 [WUD 的 GHCR 認證](#ghcr-私有映像)。
+範本透過 Docker socket 更新 bot，並掛入 `stock-bot/` 以讀寫 Compose。含 Discord 憑證的 `stock-bot-private/` 留在旁邊。若 WUD 需要指定 bridge 或 DNS，啟動前先建立 [WUD 的本機覆寫檔](#容器無法連外)。若 bot 使用私有映像，也先完成 [WUD 的 GHCR 認證](#ghcr-私有映像)。
 
 ```sh
 cd /path/to/projects/wud
@@ -57,9 +57,9 @@ sudo docker compose logs --tail 50 wud
 | --- | --- |
 | 發布新映像 | 在電腦上[建立 Release 草稿](#發布新版本)，到 GitHub 確認並發布。 |
 | 等待自動更新 | WUD 每小時整點檢查。想換頻率，見[自訂 WUD 排程](#自訂-wud-排程)。 |
-| 立刻檢查並更新 | 在 NAS 的 WUD 目錄執行 `sudo sh ./check-and-update.sh`。有新映像就會重建 bot。 |
-| 查看日誌 | 在各自的 NAS 部署目錄執行 `sudo docker compose logs --tail 50 stock-bot` 或 `sudo docker compose logs --tail 50 wud`。 |
-| 手動跑市場快報 | 在 NAS 的 bot 目錄執行 `sudo docker compose run --rm stock-bot python -m scripts.tw_market_report --config /app/config.toml`。 |
+| 立刻檢查並更新 | 在 Docker 主機的 WUD 目錄執行 `sudo sh ./check-and-update.sh`。有新映像就會重建 bot。 |
+| 查看日誌 | 在對應的部署目錄執行 `sudo docker compose logs --tail 50 stock-bot` 或 `sudo docker compose logs --tail 50 wud`。 |
+| 手動跑市場快報 | 在 Docker 主機的 bot 目錄執行 `sudo docker compose run --rm stock-bot python -m scripts.tw_market_report --config /app/config.toml`。 |
 
 ### 發布新版本
 
@@ -82,27 +82,27 @@ sudo docker compose logs --tail 50 wud
 快報會在台灣上班日透過 webhook 發送。行事曆無法查詢時會繼續執行。
 
 - **查詢別名**在 `config.toml` 的 `[aliases]` 設定，以股票代碼或 `night` 為目標。格式見[設定範例](../config.example.toml)。
-- **快報股票清單**在 [快報腳本](../scripts/tw_market_report.py) 的 `WATCHLIST`。上市用 `tse`，上櫃用 `otc`。NAS 要用新清單時，請發布新映像。
-- **夜盤樣本**預設是設定檔旁的 `data/night-samples.jsonl`。NAS 的 `/app/data` 對應 `night-data` 資料卷。若自訂 `night.sample_file`，請讓 NAS 上的樣本繼續存在該資料卷內。
+- **快報股票清單**在 [快報腳本](../scripts/tw_market_report.py) 的 `WATCHLIST`。上市用 `tse`，上櫃用 `otc`。容器要使用新清單時，請發布新映像。
+- **夜盤樣本**預設是設定檔旁的 `data/night-samples.jsonl`。容器內的 `/app/data` 對應 `night-data` 資料卷。若自訂 `night.sample_file`，請將樣本留在該資料卷內。
 
 ## 有問題才看
 
-### NAS 容器無法連外
+### 容器無法連外
 
-若 NAS 能解析 `discord.com`，但容器查 DNS 失敗，直接連外部 IP 的 TCP 443 也逾時，請查 NAS 的轉送防火牆是否放行 Compose 專用網路。單獨指定 `dns` 只會改變查詢對象。
+若 Docker 主機能解析 `discord.com`，但容器查 DNS 失敗，直接連外部 IP 的 TCP 443 也逾時，請查主機的轉送防火牆是否放行 Compose 專用網路。單獨指定 `dns` 只會改變查詢對象。
 
-可以放行該子網的 DNS 和出站 HTTPS。若 NAS 已放行 Docker 內建的 `bridge`，也可在對應的覆寫檔設定 `network_mode: bridge`。只有容器需要指定 DNS 時，才加上 `dns` 並填入該 NAS 環境可用的位址。 [Docker 網路文件](https://docs.docker.com/compose/how-tos/networking/) · [Compose DNS 設定](https://docs.docker.com/reference/compose-file/services/#dns)
+可以放行該子網的 DNS 和出站 HTTPS。若主機已放行 Docker 內建的 `bridge`，也可在對應的覆寫檔設定 `network_mode: bridge`。只有容器需要指定 DNS 時，才加上 `dns` 並填入容器可連到的 DNS 位址。 [Docker 網路文件](https://docs.docker.com/compose/how-tos/networking/) · [Compose DNS 設定](https://docs.docker.com/reference/compose-file/services/#dns)
 
-| 服務 | NAS 本機覆寫檔 | 設定位置 |
+| 服務 | 主機上的覆寫檔 | 設定位置 |
 | --- | --- | --- |
 | Bot | `stock-bot/compose.override.yaml` | `services.stock-bot` |
 | WUD | `wud/compose.override.yaml` | `services.wud` |
 
-覆寫檔放在各自的 `compose.yaml` 旁。從該目錄執行 `sudo docker compose config --quiet && sudo docker compose up -d`，Compose 就會合併設定並套用。實際 DNS、檔案權限做法和防火牆規則可記在自己的 NAS 筆記，重裝時一起還原本機覆寫檔。 [Compose 覆寫文件](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/)
+覆寫檔放在各自的 `compose.yaml` 旁。從該目錄執行 `sudo docker compose config --quiet && sudo docker compose up -d`，Compose 就會合併設定並套用。實際 DNS、檔案權限做法和防火牆規則可記在該主機的維護筆記，重裝時一起還原本機覆寫檔。 [Compose 覆寫文件](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/)
 
 ### 自訂 WUD 排程
 
-若想每 15 分鐘檢查，在 NAS 的 `wud/compose.override.yaml` 合併以下設定，保留現有的網路和 DNS 欄位。存檔後在 WUD 目錄執行 `sudo docker compose up -d wud`。 [WUD 排程文件](https://getwud.app/docs/configuration/watchers/)
+若想每 15 分鐘檢查，在 Docker 主機的 `wud/compose.override.yaml` 合併以下設定，保留現有的網路和 DNS 欄位。存檔後在 WUD 目錄執行 `sudo docker compose up -d wud`。 [WUD 排程文件](https://getwud.app/docs/configuration/watchers/)
 
 ```yaml
 services:
@@ -113,7 +113,7 @@ services:
 
 ### GHCR 私有映像
 
-在 NAS 執行 `sudo docker login ghcr.io -u YOUR_GITHUB_USERNAME`，密碼使用對該套件有讀取權限、具 `read:packages` 的 classic PAT。若 WUD 也要自動更新私有映像，在 NAS 的 `wud/compose.override.yaml` 的 `services.wud.environment` 加入 `WUD_REGISTRY_GHCR_LOCAL_USERNAME` 和 `WUD_REGISTRY_GHCR_LOCAL_TOKEN`。 [WUD GHCR 認證](https://getwud.app/docs/configuration/registries/ghcr/)
+在 Docker 主機執行 `sudo docker login ghcr.io -u YOUR_GITHUB_USERNAME`，密碼使用對該套件有讀取權限、具 `read:packages` 的 classic PAT。若 WUD 也要自動更新私有映像，在 `wud/compose.override.yaml` 的 `services.wud.environment` 加入 `WUD_REGISTRY_GHCR_LOCAL_USERNAME` 和 `WUD_REGISTRY_GHCR_LOCAL_TOKEN`。 [WUD GHCR 認證](https://getwud.app/docs/configuration/registries/ghcr/)
 
 ### 從舊設定升級
 
