@@ -75,6 +75,19 @@ sudo docker compose logs --tail 50 -f wud
 
 先確認 WUD 能正常檢查 `stock-bot`。下次正式版發布後，確認 WUD 偵測到 `latest` 的 digest 改變、容器已重建、bot 重新上線，且尚未到期的夜盤樣本仍在。
 
+#### 檢查頻率
+
+WUD 預設每小時整點檢查一次。若想每 15 分鐘檢查，在 NAS 的 `compose.override.yaml` 裡，把下方的 `environment` 合併到現有的 `wud` 服務，保留原有的網路和 DNS 設定。 [WUD 排程文件](https://getwud.app/docs/configuration/watchers/)
+
+```yaml
+services:
+  wud:
+    environment:
+      WUD_WATCHER_LOCAL_CRON: "*/15 * * * *"
+```
+
+在 WUD 目錄執行 `sudo docker compose up -d wud` 套用排程。
+
 若要立刻檢查一次，把 [check-and-update.sh](../deploy/wud/check-and-update.sh) 複製到 NAS 的 WUD 目錄，和 `compose.yaml` 放在一起，再執行：
 
 ```sh
