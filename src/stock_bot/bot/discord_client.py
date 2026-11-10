@@ -121,6 +121,7 @@ class StockChartBot(discord.Client):
             embed = discord.Embed(
                 title=f"{snapshot['code']} {snapshot['name']}",
                 description=(
+                    f"交易日期 `{snapshot['session_date']:%Y-%m-%d}`（市場當地）\n"
                     f"現價 `{snapshot['current_price']:,.2f}`  "
                     f"漲跌 `{snapshot['change_amount']:+.2f}`  "
                     f"漲跌幅 `{snapshot['change_percent']:+.2f}%`"

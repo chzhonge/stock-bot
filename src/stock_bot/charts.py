@@ -1,3 +1,4 @@
+from datetime import datetime
 from io import BytesIO
 from zoneinfo import ZoneInfo
 
@@ -132,13 +133,19 @@ def build_session_chart(session, previous, title, decimals):
     percent = change / previous * 100 if previous else None
     fig, ax = chart_frame(title)
     headline(fig, last, change, percent, decimals)
+    latest = times[-1]
+    session_date = latest.date()
+    current_date = datetime.now(latest.tzinfo).date()
+    session_label = "Previous session" if session_date < current_date else "Session date"
+    fig.text(0.94, 0.878, f"{session_label}: {session_date:%Y-%m-%d}",
+             ha="right", fontsize=10, color=MUTED)
     metrics(fig, [(label, price_text(value, decimals), FOREGROUND) for label, value in (
         ("OPEN", prices[0]), ("HIGH", max(prices)), ("LOW", min(prices)), ("PREV CLOSE", previous),
     )])
     price_line(ax, times, prices, previous=previous, baseline=previous,
                color=trend_color(change), decimals=decimals)
     intraday_ticks(fig, ax, times)
-    updated_footer(fig, times[-1])
+    updated_footer(fig, latest)
     return figure_png(fig)
 
 

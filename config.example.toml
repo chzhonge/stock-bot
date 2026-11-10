@@ -13,6 +13,14 @@ yahoo_url = "https://tw.stock.yahoo.com/quote/WTX%26"
 taifex_url = "https://www.taifex.com.tw/cht/3/futDailyMarketExcel?commodity_id=TX&marketCode=1"
 
 [aliases]
+MU = [
+    "美光",
+]
+
+TSLA = [
+    "特斯拉",
+]
+
 "^TWII" = [
     "大盤",
 ]
