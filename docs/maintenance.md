@@ -4,7 +4,7 @@ Discord bot 提供股票與夜盤查詢。市場快報是可手動執行的一�
 
 ## 首次部署
 
-1. 依照下方「發版與更新」發布第一個 Release，確認 GitHub Actions 成功產生 `ghcr.io/chzhonge/dot-price-bot:latest`。
+1. 依照下方「發版與更新」發布第一個 Release，確認 GitHub Actions 成功產生 `ghcr.io/chzhonge/stock-bot:latest`。
 2. 把 `compose.yaml` 放到 NAS 的部署目錄。將 [config.example.toml](../config.example.toml) 複製為同目錄的 `config.toml`，填寫 `[discord]` 的 token。若要執行快報，再填 `[report.discord]` 的 webhook。正式設定含有憑證，請留在 NAS。
 3. 在 Discord Developer Portal 啟用 **Message Content Intent**，並讓 bot 能在使用的頻道讀取和傳送訊息、嵌入連結及附加檔案。
 4. 給容器的 UID/GID `10001` 讀取 `config.toml` 的權限。若 GHCR 套件為私有，先用 `docker login ghcr.io -u YOUR_GITHUB_USERNAME` 登入。密碼提示請貼上可讀取該套件且具 `read:packages` 權限的 classic PAT。
@@ -32,9 +32,9 @@ docker compose logs --tail 50 bot
 
 ```yaml
 volumes:
-  - /volume1/docker/dot-price-bot:/volume1/docker/dot-price-bot
+  - /volume1/docker/stock-bot:/volume1/docker/stock-bot
 environment:
-  WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_FILE: /volume1/docker/dot-price-bot/compose.yaml
+  WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_FILE: /volume1/docker/stock-bot/compose.yaml
   WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_INCLUDEBYDEFAULT: "false"
   WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_ONDIGEST: "true"
   WUD_TRIGGER_DOCKERCOMPOSE_DOTPRICEBOT_AUTO: "true"

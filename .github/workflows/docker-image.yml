@@ -17,7 +17,7 @@ jobs:
     if: ${{ !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     env:
-      IMAGE: ghcr.io/chzhonge/dot-price-bot
+      IMAGE: ghcr.io/chzhonge/stock-bot
     steps:
       - name: Validate release tag
         run: |

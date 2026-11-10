@@ -1,4 +1,4 @@
-# dot-price-bot
+# stock-bot
 
 在 Discord 查詢股票走勢、比較多檔股票的報酬率，或查看台指期夜盤。專案也提供一個可手動執行的台股市場快報，透過 Discord webhook 發送。
 
@@ -33,6 +33,6 @@ uv run --locked python -m scripts.tw_market_report --config config.toml
 
 ## NAS 部署
 
-正式發布 GitHub Release 後，GitHub Actions 會從 Release tag 建置 `linux/amd64` Docker 映像，通過檢查後發布到 GHCR。[Compose 設定](compose.yaml) 使用 `ghcr.io/chzhonge/dot-price-bot:latest`。設定 WUD 的 Docker Compose trigger 後，WUD 會在偵測到映像更新時拉取新版本並重建 bot 容器。
+正式發布 GitHub Release 後，GitHub Actions 會從 Release tag 建置 `linux/amd64` Docker 映像，通過檢查後發布到 GHCR。[Compose 設定](compose.yaml) 使用 `ghcr.io/chzhonge/stock-bot:latest`。設定 WUD 的 Docker Compose trigger 後，WUD 會在偵測到映像更新時拉取新版本並重建 bot 容器。
 
 首次部署、發版、WUD 設定，以及別名和快報股票清單的調整方式，請見[操作手冊](docs/maintenance.md)。

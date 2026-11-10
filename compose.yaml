@@ -1,6 +1,6 @@
 services:
   bot:
-    image: ghcr.io/chzhonge/dot-price-bot:latest
+    image: ghcr.io/chzhonge/stock-bot:latest
     restart: unless-stopped
     volumes:
       - type: bind
