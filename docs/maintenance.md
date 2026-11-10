@@ -8,21 +8,20 @@
 
 ### 1. 啟動 Bot
 
-- 把 [Bot 的 Compose](../compose.yaml) 複製到 `stock-bot/compose.yaml`。
-- 把 [設定範例](../config.example.toml) 複製到 `stock-bot-private/config.toml`。填入 `[discord]` 的 bot token。要用市場快報時，再填 `[report.discord]` 的 webhook。正式設定留在 NAS，只授權管理者和容器的 UID/GID `10001` 讀取。
-- 在 Discord Developer Portal 啟用 **Message Content Intent**，並給 bot 所用頻道讀取、發送訊息、嵌入連結和附加檔案的權限。
+1. **放置 Compose 檔。** 把 [Bot 的 Compose](../compose.yaml) 複製到 `stock-bot/compose.yaml`。
+2. **準備 Bot 設定。** 把 [設定範例](../config.example.toml) 複製到 `stock-bot-private/config.toml`。填入 `[discord]` 的 bot token。要用市場快報時，再填 `[report.discord]` 的 webhook。正式設定留在 NAS，只授權管理者和容器的 UID/GID `10001` 讀取。
+3. **設定 Discord 權限。** 在 Discord Developer Portal 啟用 **Message Content Intent**，並給 bot 所用頻道讀取、發送訊息、嵌入連結和附加檔案的權限。
+4. **啟動並驗證。** 若映像是私有的，先參考 [GHCR 私有映像](#ghcr-私有映像)。接著在 NAS 執行下列指令。
 
-若映像是私有的，先參考 [GHCR 私有映像](#ghcr-私有映像)。接著在 NAS 啟動 bot。
+   ```sh
+   cd /volume1/docker/projects/stock-bot
+   sudo docker compose config --quiet &&
+   sudo docker compose pull stock-bot &&
+   sudo docker compose up -d stock-bot
+   sudo docker compose logs --tail 50 stock-bot
+   ```
 
-```sh
-cd /volume1/docker/projects/stock-bot
-sudo docker compose config --quiet &&
-sudo docker compose pull stock-bot &&
-sudo docker compose up -d stock-bot
-sudo docker compose logs --tail 50 stock-bot
-```
-
-到 Discord 試 `@機器人 2330`，確認 bot 能回圖。如果日誌出現 DNS 或連線錯誤，先看 [NAS 容器無法連外](#nas-容器無法連外)。
+   到 Discord 試 `@機器人 2330`，確認 bot 能回圖。如果日誌出現 DNS 或連線錯誤，先看 [NAS 容器無法連外](#nas-容器無法連外)。
 
 ### 2. 啟動 WUD
 
