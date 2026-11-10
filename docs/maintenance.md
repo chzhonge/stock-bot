@@ -2,7 +2,7 @@
 
 ## 第一次安裝
 
-先讓 Discord bot 跑起來，再安裝 WUD 自動更新。Bot 需要已發布的 `ghcr.io/chzhonge/stock-bot:latest`。如果 GHCR 上還沒有映像，先依[發版步驟](#發布新版本)發布第一版。
+Bot 需要已發布的 `ghcr.io/chzhonge/stock-bot:latest`。如果 GHCR 上還沒有映像，先依[發版步驟](#發布新版本)發布第一版。Bot 能在 Discord 回圖後，就完成首次部署。
 
 以下指令中的 `/path/to/projects` 請換成 Docker 主機的實際部署路徑。`stock-bot/`、`stock-bot-private/` 和 `wud/` 放在同一層。
 
@@ -23,9 +23,9 @@
 
    到 Discord 試 `@機器人 2330`，確認 bot 能回圖。如果日誌出現 DNS 或連線錯誤，先看[容器無法連外](#容器無法連外)。
 
-### 2. 啟動 WUD
+### 選用｜用 WUD 自動更新
 
-在 Docker 主機的部署路徑下建立 `wud/`，並依下表準備檔案。
+若希望新映像發布後自動更新 bot，再安裝 WUD。在 Docker 主機的部署路徑下建立 `wud/`，並依下表準備檔案。
 
 | 從 repo 取得 | 在 WUD 目錄的檔名 | 用途 |
 | --- | --- | --- |
@@ -56,8 +56,8 @@ sudo docker compose logs --tail 50 wud
 | 要做什麼 | 在哪裡操作 |
 | --- | --- |
 | 發布新映像 | 在電腦上[建立 Release 草稿](#發布新版本)，到 GitHub 確認並發布。 |
-| 等待自動更新 | WUD 每小時整點檢查。想換頻率，見[自訂 WUD 排程](#自訂-wud-排程)。 |
-| 立刻檢查並更新 | 在 Docker 主機的 WUD 目錄執行 `sudo sh ./check-and-update.sh`。有新映像就會重建 bot。 |
+| 等待自動更新 | 已部署 WUD 時，預設每小時整點檢查。想換頻率，見[自訂 WUD 排程](#自訂-wud-排程)。 |
+| 立刻檢查並更新 | 已部署 WUD 時，在其目錄執行 `sudo sh ./check-and-update.sh`。有新映像就會重建 bot。 |
 | 查看日誌 | 在對應的部署目錄執行 `sudo docker compose logs --tail 50 stock-bot` 或 `sudo docker compose logs --tail 50 wud`。 |
 | 手動跑市場快報 | 在 Docker 主機的 bot 目錄執行 `sudo docker compose run --rm stock-bot python -m scripts.tw_market_report --config /app/config.toml`。 |
 
