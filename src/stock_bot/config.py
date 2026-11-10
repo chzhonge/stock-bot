@@ -6,6 +6,24 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 
+INDEX_ALIASES = {
+    "nasdaq": "^IXIC",
+    "nasdaq composite": "^IXIC",
+    "sp500": "^GSPC",
+    "s&p500": "^GSPC",
+    "s&p 500": "^GSPC",
+    "道瓊": "^DJI",
+    "道瓊工業平均指數": "^DJI",
+    "dow": "^DJI",
+    "djia": "^DJI",
+    "費半": "^SOX",
+    "費城半導體指數": "^SOX",
+    "sox": "^SOX",
+    "加權指數": "^TWII",
+    "台灣加權指數": "^TWII",
+}
+
+
 @dataclass(frozen=True)
 class BotConfig:
     token: str = field(repr=False)
@@ -110,6 +128,8 @@ def load_config(path: Path) -> BotConfig:
             aliases[key] = target
     for alias in legacy_aliases:
         aliases.setdefault(alias.strip().casefold(), "night")
+    for alias, target in INDEX_ALIASES.items():
+        aliases.setdefault(alias, target)
 
     return BotConfig(
         token=token.strip(),

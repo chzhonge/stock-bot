@@ -6,6 +6,10 @@ from zoneinfo import ZoneInfo
 import yfinance as yf
 
 
+INDEX_SYMBOL = r"\^[A-Z][A-Z0-9]{0,9}"
+QUERY_SYMBOL = rf"(?:{INDEX_SYMBOL}|[0-9]{{4,6}}[A-Z]?(?:\.TW|\.TWO)?|[A-Z]{{1,5}}(?:[.-][A-Z]{{1,2}})?)"
+
+
 def parse_stock_query(text, aliases):
     text = text.strip()
     target = aliases.get(text.casefold())
@@ -27,12 +31,12 @@ def parse_stock_query(text, aliases):
     for entry in entries:
         entry = entry.strip()
         symbol = aliases.get(entry.casefold(), entry).upper()
-        if not re.fullmatch(r"(?:[0-9]{4,6}[A-Z]?(?:\.TW|\.TWO)?|[A-Z]{1,5}(?:[.-][A-Z]{1,2})?)", symbol):
-            raise ValueError("請輸入股票代碼，例如 `0050 2y` 或 `0050 2330 2y`")
+        if not re.fullmatch(QUERY_SYMBOL, symbol):
+            raise ValueError("請輸入股票或指數代碼，例如 `0050 2y` 或 `^IXIC ^GSPC 2y`")
         if symbol not in symbols:
             symbols.append(symbol)
     if not 1 <= len(symbols) <= 5:
-        raise ValueError("每次請輸入 1 至 5 個股票代碼")
+        raise ValueError("每次請輸入 1 至 5 個標的")
     if period == "1d" and len(symbols) == 1:
         return symbols, None
     return symbols, period or ("1y" if len(symbols) > 1 else None)
@@ -94,8 +98,7 @@ def resolve_ticker(user_input):
     if not text:
         raise ValueError("請在提及機器人後面加上股票代碼，例如 `2330` 或 `AAPL`。")
 
-    explicit_tw = re.fullmatch(r"\d{4,6}[A-Z]?\.(?:TW|TWO)", text)
-    if explicit_tw:
+    if re.fullmatch(INDEX_SYMBOL, text) or re.fullmatch(r"\d{4,6}[A-Z]?\.(?:TW|TWO)", text):
         return text, [text]
 
     tw_match = re.search(r"\b\d{4,6}[A-Z]?\b", text)
