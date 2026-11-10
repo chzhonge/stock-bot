@@ -2,7 +2,7 @@
 
 ## 第一次安裝
 
-Bot 需要已發布的 `ghcr.io/chzhonge/stock-bot:latest`。如果 GHCR 上還沒有映像，先依[發版步驟](#發布新版本)發布第一版。Bot 能在 Discord 回圖後，就完成首次部署。
+部署使用已發布的 `ghcr.io/chzhonge/stock-bot:latest`。Bot 能在 Discord 回圖後，就完成首次部署。
 
 以下指令中的 `/path/to/projects` 請換成 Docker 主機的實際部署路徑。`stock-bot/`、`stock-bot-private/` 和 `wud/` 放在同一層。
 
@@ -55,22 +55,11 @@ sudo docker compose logs --tail 50 wud
 
 | 要做什麼 | 在哪裡操作 |
 | --- | --- |
-| 發布新映像 | 在電腦上[建立 Release 草稿](#發布新版本)，到 GitHub 確認並發布。 |
 | 等待自動更新 | 已部署 WUD 時，預設每小時整點檢查。想換頻率，見[自訂 WUD 排程](#自訂-wud-排程)。 |
 | 立刻檢查並更新 | 已部署 WUD 時，在其目錄執行 `sudo sh ./check-and-update.sh`。有新映像就會重建 bot。 |
+| 用 Compose 手動更新 | 在 Docker 主機的 bot 目錄執行 `sudo docker compose pull stock-bot && sudo docker compose up -d stock-bot`。 |
 | 查看日誌 | 在對應的部署目錄執行 `sudo docker compose logs --tail 50 stock-bot` 或 `sudo docker compose logs --tail 50 wud`。 |
 | 手動跑市場快報 | 在 Docker 主機的 bot 目錄執行 `sudo docker compose run --rm stock-bot python -m scripts.tw_market_report --config /app/config.toml`。 |
-
-### 發布新版本
-
-1. 確認 `codex/architecture-refactor` 上要發版的 commit 已推送到 `chzhonge/stock-bot`。準備 UTF-8 Markdown 發行說明，有內容才列「新功能」「修正」「部署與升級」。第一版以本分支和原作者 `main` 的共同起點為基準，之後比較上一個正式 tag。
-2. 用 `gh auth login --hostname github.com --web` 登入 GitHub CLI，再從 repo 根目錄執行下方指令。將版本號、摘要和發行說明路徑換成這一版的值。[腳本](../tools/release_draft.py) 會用 `stock-bot v<版本號> - <本版重點>` 建立草稿並印出網址。
-
-   ```sh
-   python tools/release_draft.py 1.0.1 --summary "本版重點" --notes-file release-notes.md
-   ```
-
-3. 到 GitHub 確認草稿的標題、說明和目標 commit，再按 **Publish release**。到 **Actions** 確認建置和兩個指令入口的檢查已通過。成功後，GHCR 會有 Release tag 和 `latest`，兩者指向同一份 `linux/amd64` 映像。
 
 ### 本機操作與設定
 
@@ -120,3 +109,5 @@ services:
 - 若舊 Compose 的服務名是 `bot`，先用舊檔執行 `sudo docker compose stop bot` 和 `sudo docker compose rm -f bot`，再換新版。沿用原本的 Compose 專案目錄和專案名稱，可繼續使用 `night-data`。
 - 若 bot 的 `config.toml` 原先放在部署目錄內，把它移到旁邊的 `stock-bot-private/`，再套用新版 Compose。舊的 `[report.index]`、`[[report.quotes]]` 和 `[[report.watchlist]]` 自訂內容移到快報腳本後，再從 TOML 移除。
 - 若 WUD 管理員帳密原先放在 WUD 的覆寫檔，把值移到同目錄的 `.env`，再刪除覆寫檔裡的兩個帳密欄位。
+
+要建置並發布新映像，請見[維護者發版手冊](releasing.md)。
