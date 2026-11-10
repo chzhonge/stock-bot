@@ -30,6 +30,7 @@ def github_ref(ref):
 def main():
     parser = argparse.ArgumentParser(description="建立 stock-bot 的 GitHub Release 草稿")
     parser.add_argument("version", help="正式版本號，例如 1.0.0 或 v1.0.0")
+    parser.add_argument("--summary", required=True, help="標題用的單行版本重點")
     parser.add_argument("--notes-file", type=Path, required=True, help="UTF-8 Markdown 發行說明")
     args = parser.parse_args()
 
@@ -39,6 +40,10 @@ def main():
     tag = f"v{version}"
     if len(tag) > 128:
         parser.error("版本標籤不得超過 Docker 的 128 字元限制")
+
+    summary = args.summary.strip()
+    if len(summary.splitlines()) != 1:
+        parser.error("版本重點必須是非空白的單行文字")
 
     try:
         notes_file = args.notes_file.expanduser().resolve(strict=True)
@@ -64,7 +69,7 @@ def main():
             "gh", "release", "create", tag,
             "--repo", f"github.com/{REPOSITORY}",
             "--target", commit,
-            "--title", f"stock-bot {tag}",
+            "--title", f"stock-bot {tag} - {summary}",
             "--notes-file", str(notes_file),
             "--draft",
         )

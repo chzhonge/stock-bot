@@ -24,13 +24,13 @@ docker compose logs --tail 50 bot
 
 1. 在 `codex/architecture-refactor` 分支確認要發版的 commit 已推送到 `chzhonge/stock-bot`。
 2. 準備 UTF-8 Markdown 發行說明。有內容才保留「新功能」「修正」「部署與升級」等章節。第一次發版以本分支和原作者 `main` 的共同起點為基準，之後以上一個正式 tag 為基準。
-3. 安裝 GitHub CLI 並用 `gh auth login --hostname github.com --web` 登入。在專案根目錄執行下方指令，將檔案路徑換成這次準備的發行說明。[腳本](../tools/release_draft.py) 會確認目前 commit 已推送到 GitHub，使用 `v1.0.0` 和 `stock-bot v1.0.0` 建立草稿，並印出草稿網址。
+3. 安裝 GitHub CLI 並用 `gh auth login --hostname github.com --web` 登入。在專案根目錄執行下方指令，提供本版的一句話重點和發行說明的路徑。[腳本](../tools/release_draft.py) 會確認目前 commit 已推送到 GitHub，並用 `stock-bot v<版本號> - <本版重點>` 作為草稿標題。
 
    ```sh
-   python tools/release_draft.py 1.0.0 --notes-file release-notes.md
+   python tools/release_draft.py 1.0.0 --summary "Discord 查詢改版與 NAS 自動部署" --notes-file release-notes.md
    ```
 
-4. 開啟草稿，確認標題、說明和目標 commit，再按 **Publish release**。到 **Actions** 查看結果。兩個指令入口通過檢查後，同一份 `linux/amd64` 映像會以 Release tag 和 `latest` 發布到 GHCR。
+4. 開啟腳本印出的草稿網址，確認標題、說明和目標 commit，再按 **Publish release**。到 **Actions** 查看結果。兩個指令入口通過檢查後，同一份 `linux/amd64` 映像會以 Release tag 和 `latest` 發布到 GHCR。
 
 ### 設定 WUD
 
