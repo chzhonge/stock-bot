@@ -164,7 +164,9 @@ def build_history_chart(snapshot):
     code, first = next(iter(series.items()))
     dates = f"{first.index[0]:%Y-%m-%d} to {first.index[-1]:%Y-%m-%d}"
     if len(series) == 1:
-        fig, ax = chart_frame(f"{code} ADJUSTED CLOSE")
+        fig, ax = chart_frame(f"{code} PRICE HISTORY")
+        fig.text(0.04, 0.913, "ADJUSTED CLOSE", fontsize=9, fontweight="bold", color=MUTED)
+        fig.text(0.33, 0.913, "PERIOD RETURN", fontsize=9, fontweight="bold", color=MUTED)
         change = first.iloc[-1] - first.iloc[0]
         headline(fig, first.iloc[-1], change, change / first.iloc[0] * 100, 2)
         metrics(fig, [("PERIOD", period, FOREGROUND), ("DATE RANGE", dates, FOREGROUND)])
