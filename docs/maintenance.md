@@ -44,11 +44,15 @@ docker compose logs --tail 50 stock-bot
 
 將 [WUD 的 Compose 範本](../deploy/wud/compose.yaml) 複製到 NAS 上獨立的 WUD 目錄，檔名保留 `compose.yaml`。例如 bot 放在 `/volume1/docker/projects/stock-bot/`，WUD 放在同一層的 `wud/`。Bot 的 Compose 和建置用的 Dockerfile 都留在 repo 根目錄。
 
-在 WUD 目錄內建立 `.env`，填入 NAS 上存放 bot 的 `compose.yaml` 的絕對目錄。路徑末尾省略 `/`。
+將 [WUD 的環境變數範例](../deploy/wud/.env.example) 複製到 WUD 目錄並命名為 `.env`。填入 NAS 上存放 bot 的 `compose.yaml` 的絕對目錄（末尾省略 `/`），以及 WUD 管理員的帳號和密碼。WUD 即使關閉網頁介面，首次啟動仍需要初始化管理員。正式 `.env` 只留在 NAS，並限制檔案讀取權限。
 
 ```dotenv
 STOCK_BOT_COMPOSE_DIR=/volume1/docker/projects/stock-bot
+WUD_AUTH_ADMIN_USER=admin
+WUD_AUTH_ADMIN_PASSWORD=
 ```
+
+請填入密碼後再啟動。若先前已在 `compose.override.yaml` 加入管理員帳密設定，將值移到 `.env`，並移除覆寫檔中的兩個帳密欄位。
 
 WUD 透過 Docker socket 管理容器。範本會掛載 bot 的部署目錄供 WUD 更新 Compose，含憑證的 `stock-bot-private/` 應留在這個目錄之外。範本關閉網頁和 HTTP API，並只監看標有 `wud.watch: "true"` 的容器。
 
@@ -71,7 +75,7 @@ sudo docker compose logs --tail 50 -f wud
 
 先確認 WUD 能正常檢查 `stock-bot`。下次正式版發布後，確認 WUD 偵測到 `latest` 的 digest 改變、容器已重建、bot 重新上線，且尚未到期的夜盤樣本仍在。
 
-參考 [WUD Compose trigger](https://getwud.app/docs/configuration/triggers/docker-compose/) 和 [WUD GHCR 認證](https://getwud.app/docs/configuration/registries/ghcr/)。
+參考 [WUD Compose trigger](https://getwud.app/docs/configuration/triggers/docker-compose/)、[WUD 管理員初始化](https://getwud.app/docs/configuration/authentications/) 和 [WUD GHCR 認證](https://getwud.app/docs/configuration/registries/ghcr/)。
 
 ## 日常操作
 
