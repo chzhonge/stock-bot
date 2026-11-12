@@ -1,4 +1,8 @@
-COMPARISON_METHOD = "以首個共同交易日為 0%，按各標的原幣調整後收盤價計算"
+COMPARISON_METHOD = "首個共同交易日為 0% · Yahoo 原幣調整後收盤價（依資料調整分割與配息）"
+COMPARISON_ADJUSTMENTS = (
+    "股票與 ETF 的分割會換算成相同單位。配息按「除息前收盤價減配息」的價格估算再投入，"
+    "未模擬發放日實際買回、稅費或匯率。價格型指數只反映指數點位變動。"
+)
 
 
 def history_heading(snapshot):

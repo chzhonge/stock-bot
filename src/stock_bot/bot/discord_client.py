@@ -12,7 +12,7 @@ from discord.ext import tasks
 
 from stock_bot.bot.chart_help import send_chart_help
 from stock_bot.charts import trend_color
-from stock_bot.history_display import COMPARISON_METHOD, history_change, history_heading
+from stock_bot.history_display import COMPARISON_ADJUSTMENTS, COMPARISON_METHOD, history_change, history_heading
 from stock_bot.market.night import TAIWAN_TZ
 from stock_bot.market.quotes import INDEX_SYMBOL
 
@@ -252,7 +252,7 @@ class StockChartBot(discord.Client):
                 color = discord.Colour.from_str(trend_color(change))
             lines.append(f"查詢區間 `{snapshot['period']}`")
             if comparison:
-                lines.append(COMPARISON_METHOD)
+                lines.extend([COMPARISON_METHOD, COMPARISON_ADJUSTMENTS])
             embed = discord.Embed(title=title, description="\n".join(lines), color=color)
         else:
             file_name = f"{snapshot['code']}_intraday.png"

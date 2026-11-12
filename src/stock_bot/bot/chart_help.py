@@ -5,6 +5,7 @@ import logging
 import discord
 import pandas as pd
 
+from stock_bot.history_display import COMPARISON_ADJUSTMENTS
 from stock_bot.market.night import TAIWAN_TZ
 from stock_bot.market.quotes import align_history
 
@@ -35,11 +36,15 @@ CHART_GUIDE = {
         "多標的比較",
         "`/stock-bot compare 代碼:0050 sp500 區間:6mo` 或 `@機器人 0050 sp500 6mo`",
         "**從同一天開始算，誰漲得比較多？**　每條線代表一個標的。"
-        "所有線都從第一個共同交易日的 `0%` 開始，右側刻度顯示比起點漲跌了多少。\n\n"
+        "圖上只使用所有標的都有資料的日期。所有線都從第一個共同交易日的 `0%` 開始，"
+        "右側刻度顯示比起點漲跌了多少。\n\n"
         "**怎麼看結果**　上方的同色數字是最後一個共同交易日的表現。"
         "圖中 0050 是 `+12%`，S&P 500 是 `+8%`，所以這段期間 0050 多漲了 **4 個百分點**。\n\n"
-        "**跨市場怎麼算**　圖上只使用所有標的都有資料的日期。"
-        "各標的以原幣的調整後收盤價計算，未納入匯率變動。",
+        "**分割與配息怎麼算**　各標的使用 Yahoo 的原幣調整後收盤價。"
+        f"{COMPARISON_ADJUSTMENTS}\n\n"
+        "**舉例**　0050 一拆四會把分割前的每單位價格除以四。"
+        "假設 0056 昨收 40 元、配息 1 元，除息參考價就是 39 元。"
+        "若當天收 39 元，含息估算為 0%。",
     ),
     "night": (
         "台指期夜盤",
