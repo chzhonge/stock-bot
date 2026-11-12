@@ -10,6 +10,7 @@ import discord
 from discord import app_commands
 from discord.ext import tasks
 
+from stock_bot.bot.chart_help import send_chart_help
 from stock_bot.charts import trend_color
 from stock_bot.history_display import COMPARISON_METHOD, history_change, history_heading
 from stock_bot.market.night import TAIWAN_TZ
@@ -49,7 +50,9 @@ def help_embed():
             "查看夜盤報價與可取得的走勢圖。\n\n"
             "**區間寫法**\n"
             "`14d`（14 天）、`6mo`（6 個月）、`2y`（2 年）、"
-            "`ytd`（今年以來）、`max`（最長可用區間）"
+            "`ytd`（今年以來）、`max`（最長可用區間）\n\n"
+            "**圖表手冊**\n"
+            "`/stock-bot chart-help` 或 `@機器人 chart-help`，查看圖表範例與讀法。"
         ),
     )
 
@@ -62,6 +65,11 @@ class StockCommands(app_commands.Group):
     @app_commands.command(description="查看股票機器人的查詢說明")
     async def help(self, interaction: discord.Interaction):
         await interaction.response.send_message(embed=help_embed(), ephemeral=True)
+
+    @app_commands.command(name="chart-help", description="查看四種圖表的範例與讀法")
+    async def chart_help(self, interaction: discord.Interaction):
+        send = partial(interaction.response.send_message, ephemeral=True)
+        await send_chart_help(send, interaction.user.id, self.bot.service)
 
     @app_commands.command(description="查詢單一標的的盤中或歷史走勢")
     @app_commands.rename(symbol="代碼", period="區間")
@@ -171,6 +179,10 @@ class StockChartBot(discord.Client):
         reply = partial(message.reply, mention_author=False)
         if user_input.casefold() == "help":
             await reply(embed=help_embed())
+            return
+
+        if user_input.casefold() == "chart-help":
+            await send_chart_help(reply, message.author.id, self.service)
             return
 
         await self.run_query(reply, user_input, typing=message.channel.typing)
