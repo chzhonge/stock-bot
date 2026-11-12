@@ -71,13 +71,19 @@ class StockChartService:
                         reply = ("stock", data, None)
                     else:
                         history = {}
+                        labels = {}
                         for symbol in symbols:
                             remaining = deadline - loop.time()
                             if result.done() or remaining <= 0:
                                 raise TimeoutError
-                            code, series = await asyncio.to_thread(self.repository.fetch_history, symbol, period, remaining)
+                            code, series, name = await asyncio.to_thread(
+                                self.repository.fetch_history, symbol, period, remaining,
+                            )
                             history[code] = series
-                        reply = ("history", {"period": period, "series": align_history(history)}, None)
+                            labels[code] = f"{code} {name}" if name else code
+                        reply = ("history", {
+                            "period": period, "series": align_history(history), "labels": labels,
+                        }, None)
                 if not result.done():
                     result.set_result(reply)
             except asyncio.CancelledError:

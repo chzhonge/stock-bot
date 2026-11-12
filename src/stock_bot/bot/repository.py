@@ -23,7 +23,7 @@ class StockChartRepository:
         return fetch_stock_snapshot(symbol, self.timeout)
 
     def fetch_history(self, symbol, period, remaining):
-        return fetch_stock_history(symbol, period, min(self.timeout, remaining))
+        return fetch_stock_history(symbol, period, min(self.timeout, remaining), include_name=True)
 
     def collect_night_quote(self, include_candles):
         now = time.monotonic()

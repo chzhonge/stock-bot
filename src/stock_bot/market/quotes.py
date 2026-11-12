@@ -1,9 +1,12 @@
 import datetime
 import re
 from calendar import monthrange
+from time import monotonic
 from zoneinfo import ZoneInfo
 
 import yfinance as yf
+
+from stock_bot.market.tw_names import taiwan_security_names
 
 
 INDEX_SYMBOL = r"\^[A-Z][A-Z0-9]{0,9}"
@@ -43,6 +46,7 @@ def parse_stock_query(text, aliases):
 
 
 def fetch_intraday_snapshot(symbol, *, timeout=10, minimum_points=1, include_name=False):
+    started_at = monotonic()
     ticker = yf.Ticker(symbol)
     data = ticker.history(period="2d", interval="5m", timeout=timeout)
     if data.empty:
@@ -71,9 +75,11 @@ def fetch_intraday_snapshot(symbol, *, timeout=10, minimum_points=1, include_nam
 
     name = None
     if include_name:
-        if info is None:
-            info = ticker.info
-        name = info.get("longName") or info.get("shortName")
+        name = taiwan_security_names.lookup(symbol, timeout=timeout - (monotonic() - started_at))
+        if name is None:
+            if info is None:
+                info = ticker.info
+            name = info.get("longName") or info.get("shortName")
 
     current_price = float(session.iloc[-1])
     change_amount = current_price - previous_close
@@ -149,7 +155,8 @@ def history_window(period, today):
     return {"start": start.isoformat(), "end": (today + datetime.timedelta(days=1)).isoformat()}
 
 
-def fetch_stock_history(user_input, period, timeout=10):
+def fetch_stock_history(user_input, period, timeout=10, *, include_name=False):
+    started_at = monotonic()
     code, candidates = resolve_ticker(user_input)
     today = datetime.datetime.now(ZoneInfo("Asia/Taipei")).date()
     window = history_window(period, today)
@@ -164,6 +171,9 @@ def fetch_stock_history(user_input, period, timeout=10):
         closes.index = closes.index.tz_localize(None).normalize()
         closes = closes[~closes.index.duplicated(keep="last")].sort_index()
         if len(closes) >= 2:
+            if include_name:
+                name = taiwan_security_names.lookup(symbol, timeout=timeout - (monotonic() - started_at))
+                return code, closes, name
             return code, closes
     raise ValueError(f"找不到 `{code}` 在 `{period}` 的足夠歷史資料。")
 
