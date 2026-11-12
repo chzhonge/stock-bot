@@ -7,6 +7,7 @@ import discord
 from discord.ext import tasks
 
 from stock_bot.charts import trend_color
+from stock_bot.history_display import COMPARISON_METHOD, history_change, history_heading
 from stock_bot.market.night import TAIWAN_TZ
 
 
@@ -100,21 +101,28 @@ class StockChartBot(discord.Client):
             )
         elif reply_type == "history":
             series = snapshot["series"]
-            period = snapshot["period"]
+            labels = snapshot.get("labels", {})
             comparison = len(series) > 1
             file_name = "stock_comparison.png" if comparison else "stock_history.png"
-            title = f"多標的比較 · {period}" if comparison else f"{next(iter(series))} · {period}"
-            dates = next(iter(series.values())).index
-            lines = [f"`{dates[0]:%Y-%m-%d}` 至 `{dates[-1]:%Y-%m-%d}`"]
+            title, dates = history_heading(snapshot)
+            lines = [dates]
             if comparison:
-                lines.extend(f"**{code}** `{values.iloc[-1]:+.2f}%`" for code, values in series.items())
-                lines.append("共同交易日 · 調整後收盤價報酬率（各標的原幣）")
+                lines.extend(
+                    f"**{labels.get(code, code)}** `{values.iloc[-1]:+.2f}%`"
+                    for code, values in series.items()
+                )
                 color = discord.Colour.from_str(trend_color(None))
             else:
                 values = next(iter(series.values()))
-                change = (values.iloc[-1] / values.iloc[0] - 1) * 100
-                lines.append(f"最新調整後收盤價 `{values.iloc[-1]:,.2f}`  區間漲跌 `{change:+.2f}%`")
+                change, change_text = history_change(values)
+                lines.extend([
+                    f"最新調整後收盤價 `{values.iloc[-1]:,.2f}`",
+                    f"區間漲跌 `{change_text}`",
+                ])
                 color = discord.Colour.from_str(trend_color(change))
+            lines.append(f"查詢區間 `{snapshot['period']}`")
+            if comparison:
+                lines.append(COMPARISON_METHOD)
             embed = discord.Embed(title=title, description="\n".join(lines), color=color)
         else:
             file_name = f"{snapshot['code']}_intraday.png"

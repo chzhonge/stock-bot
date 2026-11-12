@@ -15,6 +15,10 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     MPLBACKEND=Agg
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --gid 10001 bot \
     && useradd --uid 10001 --gid bot --create-home bot \
     && install -d -o bot -g bot /app/data

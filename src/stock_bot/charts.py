@@ -1,11 +1,15 @@
 from datetime import datetime
+from functools import cache
 from io import BytesIO
 from zoneinfo import ZoneInfo
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.dates import AutoDateLocator, ConciseDateFormatter
 from matplotlib.figure import Figure
+from matplotlib.font_manager import fontManager
 from matplotlib.ticker import FuncFormatter
+
+from stock_bot.history_display import COMPARISON_METHOD, history_change, history_heading
 
 
 BACKGROUND = "#0b0f14"
@@ -14,6 +18,14 @@ FOREGROUND = "#f8fafc"
 REFERENCE = "#489dce"
 PALETTE = ("#62a5ed", "#f19966", "#54c7a3", "#c291ec", "#e6c46a")
 TAIPEI_TIME = ZoneInfo("Asia/Taipei")
+
+
+@cache
+def chart_font_families():
+    available = {font.name for font in fontManager.ttflist}
+    # Matplotlib can index only the first face of Debian's Noto CJK collection.
+    fallbacks = ("Noto Sans CJK TC", "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", "Noto Sans CJK JP")
+    return ["sans-serif", *(family for family in fallbacks if family in available)]
 
 
 def figure_png(figure):
@@ -48,7 +60,7 @@ def chart_frame(title, *, has_volume=False):
     ax.grid(axis="y", color="#26303a", alpha=0.4)
     ax.set_axisbelow(True)
     fig.text(0.04, 0.94, title, fontsize=23 if len(title) <= 45 else 17,
-             fontweight="bold", color=FOREGROUND)
+             fontfamily=chart_font_families(), fontweight="bold", color=FOREGROUND)
     return fig, ax
 
 
@@ -63,8 +75,9 @@ def headline(fig, price, change, percent, decimals, *, y=0.875):
 def metrics(fig, items):
     for i, (label, value, color) in enumerate(items):
         x = 0.04 + i * 0.18
-        fig.text(x, 0.823, label, fontsize=9, fontweight="bold", color=MUTED)
-        fig.text(x, 0.787, value, fontsize=14, fontweight="bold", color=color)
+        fig.text(x, 0.823, label, fontsize=9, fontfamily=chart_font_families(), fontweight="bold", color=MUTED)
+        fig.text(x, 0.787, value, fontsize=14, fontfamily=chart_font_families(),
+                 fontweight="bold", color=color)
 
 
 def price_line(ax, times, prices, *, previous, baseline, color, decimals):
@@ -160,26 +173,32 @@ def build_stock_chart(snapshot):
 
 def build_history_chart(snapshot):
     series = snapshot["series"]
-    period = snapshot["period"]
-    code, first = next(iter(series.items()))
-    dates = f"{first.index[0]:%Y-%m-%d} to {first.index[-1]:%Y-%m-%d}"
+    labels = snapshot.get("labels", {})
+    title, dates = history_heading(snapshot)
+    fig, ax = chart_frame(title)
+    fig.text(0.04, 0.891, dates, fontsize=13, color=MUTED, fontfamily=chart_font_families())
+    fig.text(0.04, 0.026, f"查詢區間 {snapshot['period']}", fontsize=9,
+             color=MUTED, fontfamily=chart_font_families())
     if len(series) == 1:
-        fig, ax = chart_frame(f"{code} PRICE HISTORY")
-        fig.text(0.04, 0.913, "ADJUSTED CLOSE", fontsize=9, fontweight="bold", color=MUTED)
-        fig.text(0.33, 0.913, "PERIOD RETURN", fontsize=9, fontweight="bold", color=MUTED)
-        change = first.iloc[-1] - first.iloc[0]
-        headline(fig, first.iloc[-1], change, change / first.iloc[0] * 100, 2, y=0.85)
-        metrics(fig, [("PERIOD", period, FOREGROUND), ("DATE RANGE", dates, FOREGROUND)])
+        first = next(iter(series.values()))
+        change, change_text = history_change(first)
+        metrics(fig, [
+            ("最新調整後收盤價", price_text(first.iloc[-1], 2), FOREGROUND),
+            ("區間漲跌", change_text, trend_color(change)),
+        ])
+        ax.yaxis.set_label_position("right")
+        ax.set_ylabel("調整後收盤價", rotation=270, labelpad=11, fontsize=9,
+                      color=MUTED, fontfamily=chart_font_families())
         price_line(ax, list(first.index), first.tolist(), previous=None, baseline=first.iloc[0],
                    color=trend_color(change), decimals=2)
     else:
-        fig, ax = chart_frame("ADJUSTED RETURN COMPARISON")
-        fig.text(0.04, 0.875, f"{period}  |  {dates}", fontsize=14, color=MUTED)
         items = []
         for color, (code, values) in zip(PALETTE, series.items()):
             ax.plot(values.index, values, color=color, linewidth=2.0)
-            items.append((code, f"{values.iloc[-1]:+.2f}%", color))
+            items.append((labels.get(code, code), f"{values.iloc[-1]:+.2f}%", color))
         metrics(fig, items)
+        fig.text(0.94, 0.026, COMPARISON_METHOD, ha="right", fontsize=9,
+                 color=MUTED, fontfamily=chart_font_families())
         ax.axhline(0, color=REFERENCE, linestyle="--", linewidth=1.1)
         ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:+.0f}%"))
         ax.margins(x=0.04, y=0.10)
