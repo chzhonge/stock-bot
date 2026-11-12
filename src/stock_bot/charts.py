@@ -9,7 +9,7 @@ from matplotlib.figure import Figure
 from matplotlib.font_manager import fontManager
 from matplotlib.ticker import FuncFormatter
 
-from stock_bot.history_display import COMPARISON_METHOD, history_change, history_heading
+from stock_bot.history_display import comparison_method, history_change, history_heading, history_price_label
 
 
 BACKGROUND = "#0b0f14"
@@ -182,12 +182,13 @@ def build_history_chart(snapshot):
     if len(series) == 1:
         first = next(iter(series.values()))
         change, change_text = history_change(first)
+        price_label = history_price_label(snapshot)
         metrics(fig, [
-            ("最新調整後收盤價", price_text(first.iloc[-1], 2), FOREGROUND),
+            (f"最新{price_label}", price_text(first.iloc[-1], 2), FOREGROUND),
             ("區間漲跌", change_text, trend_color(change)),
         ])
         ax.yaxis.set_label_position("right")
-        ax.set_ylabel("調整後收盤價", rotation=270, labelpad=11, fontsize=9,
+        ax.set_ylabel(price_label, rotation=270, labelpad=11, fontsize=9,
                       color=MUTED, fontfamily=chart_font_families())
         price_line(ax, list(first.index), first.tolist(), previous=None, baseline=first.iloc[0],
                    color=trend_color(change), decimals=2)
@@ -197,7 +198,7 @@ def build_history_chart(snapshot):
             ax.plot(values.index, values, color=color, linewidth=2.0)
             items.append((labels.get(code, code), f"{values.iloc[-1]:+.2f}%", color))
         metrics(fig, items)
-        fig.text(0.94, 0.026, COMPARISON_METHOD, ha="right", fontsize=9,
+        fig.text(0.94, 0.026, comparison_method(snapshot), ha="right", fontsize=9,
                  color=MUTED, fontfamily=chart_font_families())
         ax.axhline(0, color=REFERENCE, linestyle="--", linewidth=1.1)
         ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:+.0f}%"))

@@ -12,7 +12,16 @@ from discord.ext import tasks
 
 from stock_bot.bot.chart_help import send_chart_help
 from stock_bot.charts import trend_color
-from stock_bot.history_display import COMPARISON_ADJUSTMENTS, COMPARISON_METHOD, history_change, history_heading
+from stock_bot.history_display import (
+    COMPARISON_ADJUSTMENTS,
+    DIVIDEND_RETURN,
+    PRICE_COMPARISON_ADJUSTMENTS,
+    PRICE_RETURN,
+    comparison_method,
+    history_change,
+    history_heading,
+    history_price_label,
+)
 from stock_bot.market.night import TAIWAN_TZ
 from stock_bot.market.quotes import INDEX_SYMBOL
 
@@ -26,6 +35,10 @@ INDEX_NAMES = {
     "^DJI": "道瓊工業平均指數",
     "^SOX": "費城半導體指數",
 }
+RETURN_CHOICES = [
+    app_commands.Choice(name=DIVIDEND_RETURN, value="adjusted"),
+    app_commands.Choice(name=PRICE_RETURN, value="price"),
+]
 
 
 def help_embed():
@@ -45,6 +58,11 @@ def help_embed():
             "**多檔比較**\n"
             "`/stock-bot compare 代碼:0050 2330 區間:6mo` 或 `@機器人 0050 2330 6mo`\n"
             "用空格分隔 2 至 5 個標的。省略區間時預設比較近 1 年。\n\n"
+            "**報酬模式**\n"
+            "`quote` 歷史查詢與 `compare` 預設用含息報酬，估算配息再投入。"
+            "選「價格報酬」只看價格漲跌。兩種都會調整分割。\n"
+            "`quote` 選報酬時請填寫歷史區間。\n"
+            "`/stock-bot compare 代碼:0050 0056 區間:1y 報酬:價格報酬`\n\n"
             "**台指期夜盤**\n"
             "`/stock-bot night` 或 `@機器人 夜盤`\n"
             "查看夜盤報價與可取得的走勢圖。\n\n"
@@ -72,10 +90,18 @@ class StockCommands(app_commands.Group):
         await send_chart_help(send, interaction.user.id, self.bot.service)
 
     @app_commands.command(description="查詢單一標的的盤中或歷史走勢")
-    @app_commands.rename(symbol="代碼", period="區間")
-    @app_commands.describe(symbol="股票、ETF 或指數代碼，例如 0050", period="例如 6mo、2y 或 ytd，留空查盤中")
-    async def quote(self, interaction: discord.Interaction, symbol: str, period: str | None = None):
-        await self.bot.run_slash_query(interaction, "quote", symbol, period)
+    @app_commands.rename(symbol="代碼", period="區間", return_mode="報酬")
+    @app_commands.describe(
+        symbol="股票、ETF 或指數代碼，例如 0050",
+        period="例如 6mo、2y 或 ytd，留空查盤中",
+        return_mode="歷史走勢的報酬模式，預設含息報酬",
+    )
+    @app_commands.choices(return_mode=RETURN_CHOICES)
+    async def quote(
+        self, interaction: discord.Interaction, symbol: str, period: str | None = None,
+        return_mode: str | None = None,
+    ):
+        await self.bot.run_slash_query(interaction, "quote", symbol, period, return_mode=return_mode)
 
     @app_commands.command(description="查詢單一指數的盤中或歷史走勢")
     @app_commands.rename(symbol="指數", period="區間")
@@ -113,10 +139,18 @@ class StockCommands(app_commands.Group):
         return choices
 
     @app_commands.command(description="比較 2 至 5 個標的的報酬率")
-    @app_commands.rename(symbols="代碼", period="區間")
-    @app_commands.describe(symbols="以空格分隔代碼，例如 0050 2330", period="例如 6mo、2y 或 ytd，留空比較近 1 年")
-    async def compare(self, interaction: discord.Interaction, symbols: str, period: str | None = None):
-        await self.bot.run_slash_query(interaction, "compare", symbols, period)
+    @app_commands.rename(symbols="代碼", period="區間", return_mode="報酬")
+    @app_commands.describe(
+        symbols="以空格分隔代碼，例如 0050 2330",
+        period="例如 6mo、2y 或 ytd，留空比較近 1 年",
+        return_mode="預設含息報酬，也可只比較價格漲跌",
+    )
+    @app_commands.choices(return_mode=RETURN_CHOICES)
+    async def compare(
+        self, interaction: discord.Interaction, symbols: str, period: str | None = None,
+        return_mode: str | None = None,
+    ):
+        await self.bot.run_slash_query(interaction, "compare", symbols, period, return_mode=return_mode)
 
     @app_commands.command(description="查看台指期夜盤報價與走勢")
     async def night(self, interaction: discord.Interaction):
@@ -187,15 +221,18 @@ class StockChartBot(discord.Client):
 
         await self.run_query(reply, user_input, typing=message.channel.typing)
 
-    async def run_slash_query(self, interaction, command, user_input="", period=None):
+    async def run_slash_query(self, interaction, command, user_input="", period=None, *, return_mode=None):
         await interaction.response.defer(thinking=True)
-        await self.run_query(interaction.followup.send, user_input, command=command, period=period)
+        price_only = None if return_mode is None else return_mode == "price"
+        await self.run_query(
+            interaction.followup.send, user_input, command=command, period=period, price_only=price_only,
+        )
 
-    async def run_query(self, reply, user_input, *, command=None, period=None, typing=nullcontext):
+    async def run_query(self, reply, user_input, *, command=None, period=None, price_only=None, typing=nullcontext):
         deadline = asyncio.get_running_loop().time() + self.query_timeout_seconds
         try:
             with self.service.reserve_query():
-                result = self.service.enqueue(user_input, deadline, command=command, period=period)
+                result = self.service.enqueue(user_input, deadline, command=command, period=period, price_only=price_only)
                 await self.handle_query(reply, result, deadline, typing)
         except asyncio.QueueFull:
             await reply("目前查詢較多，請稍後再試。")
@@ -246,13 +283,14 @@ class StockChartBot(discord.Client):
                 values = next(iter(series.values()))
                 change, change_text = history_change(values)
                 lines.extend([
-                    f"最新調整後收盤價 `{values.iloc[-1]:,.2f}`",
+                    f"最新{history_price_label(snapshot)} `{values.iloc[-1]:,.2f}`",
                     f"區間漲跌 `{change_text}`",
                 ])
                 color = discord.Colour.from_str(trend_color(change))
             lines.append(f"查詢區間 `{snapshot['period']}`")
             if comparison:
-                lines.extend([COMPARISON_METHOD, COMPARISON_ADJUSTMENTS])
+                adjustments = PRICE_COMPARISON_ADJUSTMENTS if snapshot.get("price_only") else COMPARISON_ADJUSTMENTS
+                lines.extend([comparison_method(snapshot), adjustments])
             embed = discord.Embed(title=title, description="\n".join(lines), color=color)
         else:
             file_name = f"{snapshot['code']}_intraday.png"

@@ -32,9 +32,9 @@ class StockChartService:
         finally:
             self.in_flight -= 1
 
-    def enqueue(self, user_input, deadline, *, command=None, period=None):
+    def enqueue(self, user_input, deadline, *, command=None, period=None, price_only=None):
         result = asyncio.get_running_loop().create_future()
-        self.quote_queue.put_nowait((user_input, deadline, result, command, period))
+        self.quote_queue.put_nowait((user_input, deadline, result, command, period, price_only))
         return result
 
     async def start(self):
@@ -45,7 +45,7 @@ class StockChartService:
             self.quote_worker.cancel()
             await asyncio.gather(self.quote_worker, return_exceptions=True)
         while not self.quote_queue.empty():
-            _, _, result, _, _ = self.quote_queue.get_nowait()
+            _, _, result, _, _, _ = self.quote_queue.get_nowait()
             result.cancel()
             self.quote_queue.task_done()
 
@@ -53,7 +53,7 @@ class StockChartService:
         loop = asyncio.get_running_loop()
         yahoo_retry_at = 0.0
         while True:
-            user_input, deadline, result, command, requested_period = await self.quote_queue.get()
+            user_input, deadline, result, command, requested_period, price_only = await self.quote_queue.get()
             try:
                 if result.done() or loop.time() >= deadline:
                     continue
@@ -76,6 +76,8 @@ class StockChartService:
                         if command == "compare" and len(symbols) < 2:
                             raise ValueError("請輸入至少兩個不同的標的，例如 `0050 2330`。")
                     if period is None:
+                        if price_only is not None:
+                            raise ValueError("選擇報酬模式時，請填寫歷史區間，例如 `6mo` 或 `1y`。")
                         data = await asyncio.to_thread(self.repository.fetch_stock, symbols[0])
                         reply = ("stock", data, None)
                     else:
@@ -87,11 +89,13 @@ class StockChartService:
                                 raise TimeoutError
                             code, series, name = await asyncio.to_thread(
                                 self.repository.fetch_history, symbol, period, remaining,
+                                price_only=bool(price_only),
                             )
                             history[code] = series
                             labels[code] = f"{code} {name}" if name else code
                         reply = ("history", {
                             "period": period, "series": align_history(history), "labels": labels,
+                            "price_only": bool(price_only),
                         }, None)
                 if not result.done():
                     result.set_result(reply)

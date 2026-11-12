@@ -166,18 +166,19 @@ def history_window(period, today):
     return {"start": start.isoformat(), "end": (today + datetime.timedelta(days=1)).isoformat()}
 
 
-def fetch_stock_history(user_input, period, timeout=10, *, include_name=False):
+def fetch_stock_history(user_input, period, timeout=10, *, include_name=False, price_only=False):
     started_at = monotonic()
     code, candidates = resolve_ticker(user_input)
     today = datetime.datetime.now(ZoneInfo("Asia/Taipei")).date()
     window = history_window(period, today)
+    column = "Close" if price_only else "Adj Close"
     for symbol in dict.fromkeys(candidates):
         data = yf.Ticker(symbol).history(
-            **window, interval="1d", auto_adjust=True, actions=False, timeout=timeout,
+            **window, interval="1d", auto_adjust=False, actions=False, timeout=timeout,
         )
-        if data.empty or "Close" not in data:
+        if data.empty or column not in data:
             continue
-        closes = data["Close"].dropna()
+        closes = data[column].dropna()
         closes = closes[(closes > 0) & (closes < float("inf"))]
         closes.index = closes.index.tz_localize(None).normalize()
         closes = closes[~closes.index.duplicated(keep="last")].sort_index()
