@@ -2,8 +2,11 @@ import asyncio
 import datetime
 import io
 import logging
+from contextlib import nullcontext
+from functools import partial
 
 import discord
+from discord import app_commands
 from discord.ext import tasks
 
 from stock_bot.charts import trend_color
@@ -14,6 +17,56 @@ from stock_bot.market.night import TAIWAN_TZ
 logger = logging.getLogger(__name__)
 
 
+def help_embed():
+    return discord.Embed(
+        title="股票機器人｜查詢說明",
+        description=(
+            "輸入 `/stock-bot` 後選擇指令，也可以在頻道提及機器人查詢。\n\n"
+            "**盤中走勢**\n"
+            "`/stock-bot quote 代碼:2330` 或 `@機器人 2330`\n"
+            "查看最新交易日的盤中圖。\n\n"
+            "**歷史走勢**\n"
+            "`/stock-bot quote 代碼:AAPL 區間:2y` 或 `@機器人 AAPL 2y`\n"
+            "查看單一標的的歷史走勢。\n\n"
+            "**多檔比較**\n"
+            "`/stock-bot compare 代碼:0050 2330 區間:6mo` 或 `@機器人 0050 2330 6mo`\n"
+            "用空格分隔 2 至 5 個標的。省略區間時預設比較近 1 年。\n\n"
+            "**台指期夜盤**\n"
+            "`/stock-bot night` 或 `@機器人 夜盤`\n"
+            "查看夜盤報價與可取得的走勢圖。\n\n"
+            "**區間寫法**\n"
+            "`14d`（14 天）、`6mo`（6 個月）、`2y`（2 年）、"
+            "`ytd`（今年以來）、`max`（最長可用區間）"
+        ),
+    )
+
+
+class StockCommands(app_commands.Group):
+    def __init__(self, bot):
+        super().__init__(name="stock-bot", description="查詢股票走勢、多檔報酬率與台指期夜盤")
+        self.bot = bot
+
+    @app_commands.command(description="查看股票機器人的查詢說明")
+    async def help(self, interaction: discord.Interaction):
+        await interaction.response.send_message(embed=help_embed(), ephemeral=True)
+
+    @app_commands.command(description="查詢單一標的的盤中或歷史走勢")
+    @app_commands.rename(symbol="代碼", period="區間")
+    @app_commands.describe(symbol="股票、ETF 或指數代碼，例如 0050", period="例如 6mo、2y 或 ytd，留空查盤中")
+    async def quote(self, interaction: discord.Interaction, symbol: str, period: str | None = None):
+        await self.bot.run_slash_query(interaction, "quote", symbol, period)
+
+    @app_commands.command(description="比較 2 至 5 個標的的報酬率")
+    @app_commands.rename(symbols="代碼", period="區間")
+    @app_commands.describe(symbols="以空格分隔代碼，例如 0050 2330", period="例如 6mo、2y 或 ytd，留空比較近 1 年")
+    async def compare(self, interaction: discord.Interaction, symbols: str, period: str | None = None):
+        await self.bot.run_slash_query(interaction, "compare", symbols, period)
+
+    @app_commands.command(description="查看台指期夜盤報價與走勢")
+    async def night(self, interaction: discord.Interaction):
+        await self.bot.run_slash_query(interaction, "night")
+
+
 class StockChartBot(discord.Client):
     def __init__(self, service, *, nickname, query_timeout_seconds):
         intents = discord.Intents.default()
@@ -22,9 +75,15 @@ class StockChartBot(discord.Client):
         self.service = service
         self.nickname = nickname
         self.query_timeout_seconds = query_timeout_seconds
+        self.command_tree = app_commands.CommandTree(self)
+        self.command_tree.add_command(StockCommands(self))
 
     async def setup_hook(self):
         await self.service.start()
+        try:
+            await self.command_tree.sync()
+        except discord.HTTPException:
+            logger.exception("Discord 斜線指令同步失敗")
 
     async def close(self):
         self.night_sampler.cancel()
@@ -61,34 +120,45 @@ class StockChartBot(discord.Client):
             return
 
         user_input = message.content.replace(f"<@{self.user.id}>", "").replace(f"<@!{self.user.id}>", "").strip()
-        loop = asyncio.get_running_loop()
-        deadline = loop.time() + self.query_timeout_seconds
+        reply = partial(message.reply, mention_author=False)
+        if user_input.casefold() == "help":
+            await reply(embed=help_embed())
+            return
+
+        await self.run_query(reply, user_input, typing=message.channel.typing)
+
+    async def run_slash_query(self, interaction, command, user_input="", period=None):
+        await interaction.response.defer(thinking=True)
+        await self.run_query(interaction.followup.send, user_input, command=command, period=period)
+
+    async def run_query(self, reply, user_input, *, command=None, period=None, typing=nullcontext):
+        deadline = asyncio.get_running_loop().time() + self.query_timeout_seconds
         try:
             with self.service.reserve_query():
-                result = self.service.enqueue(user_input, deadline)
-                await self.handle_query(message, result, deadline)
+                result = self.service.enqueue(user_input, deadline, command=command, period=period)
+                await self.handle_query(reply, result, deadline, typing)
         except asyncio.QueueFull:
-            await message.reply("目前查詢較多，請稍後再試。", mention_author=False)
+            await reply("目前查詢較多，請稍後再試。")
 
-    async def handle_query(self, message, result, deadline):
+    async def handle_query(self, reply, result, deadline, typing):
         try:
-            async with message.channel.typing():
+            async with typing():
                 async with asyncio.timeout_at(deadline):
                     reply_type, snapshot, candles = await result
                 image = await self.service.render(reply_type, snapshot, candles)
-                await self.reply_with_chart(message, reply_type, snapshot, image)
+                await self.reply_with_chart(reply, reply_type, snapshot, image)
         except TimeoutError:
-            await message.reply("行情查詢逾時，請稍後再試。", mention_author=False)
+            await reply("行情查詢逾時，請稍後再試。")
         except ValueError as exc:
-            await message.reply(f"查詢失敗：{exc}", mention_author=False)
+            await reply(f"查詢失敗：{exc}")
         except Exception:
             logger.exception("行情查詢或回覆失敗")
-            await message.reply("查詢失敗，請稍後再試。", mention_author=False)
+            await reply("查詢失敗，請稍後再試。")
         finally:
             if not result.done():
                 result.cancel()
 
-    async def reply_with_chart(self, message, reply_type, snapshot, image):
+    async def reply_with_chart(self, reply, reply_type, snapshot, image):
         if reply_type == "night":
             file_name = "tx_night_session.png"
             change = snapshot["change_amount"]
@@ -141,6 +211,6 @@ class StockChartBot(discord.Client):
         with io.BytesIO(image) as buffer:
             attachment = discord.File(buffer, filename=file_name)
             try:
-                await message.reply(embed=embed, file=attachment, mention_author=False)
+                await reply(embed=embed, file=attachment)
             finally:
                 attachment.close()

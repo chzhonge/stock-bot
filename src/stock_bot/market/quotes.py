@@ -11,6 +11,7 @@ from stock_bot.market.tw_names import taiwan_security_names
 
 INDEX_SYMBOL = r"\^[A-Z][A-Z0-9]{0,9}"
 QUERY_SYMBOL = rf"(?:{INDEX_SYMBOL}|[0-9]{{4,6}}[A-Z]?(?:\.TW|\.TWO)?|[A-Z]{{1,5}}(?:[.-][A-Z]{{1,2}})?)"
+QUERY_PERIOD = r"(?:ytd|max|[1-9][0-9]*(?:d|mo|y))"
 
 
 def parse_stock_query(text, aliases):
@@ -23,10 +24,20 @@ def parse_stock_query(text, aliases):
     period = None
     if len(parts) == 2:
         suffix = parts[-1].lower()
-        if suffix in {"ytd", "max"} or re.fullmatch(r"[1-9][0-9]*(?:d|mo|y)", suffix):
+        if re.fullmatch(QUERY_PERIOD, suffix):
             text, period = parts[0], suffix
         elif re.fullmatch(r"\d+(?:d|w|wk|m|mo|y)", suffix):
             raise ValueError(f"無效的區間 `{suffix}`，請使用正整數加 d、mo 或 y，例如 `14d`、`18mo`、`3y`")
+
+    return parse_stock_selection(text, aliases, period)
+
+
+def parse_stock_selection(text, aliases, period=None):
+    text = text.strip()
+    if period is not None:
+        period = period.strip().lower()
+        if not re.fullmatch(QUERY_PERIOD, period):
+            raise ValueError(f"無效的區間 `{period}`，請使用 `14d`、`18mo`、`3y`、`ytd` 或 `max` 等格式")
 
     target = aliases.get(text.casefold())
     entries = [text] if target is not None else text.split(",") if "," in text else text.split()
