@@ -71,6 +71,8 @@ class StockChartService:
                         symbols, period = parse_stock_selection(user_input, self.aliases, requested_period)
                         if command == "quote" and len(symbols) != 1:
                             raise ValueError("請輸入一個標的。若要比較多檔，請使用 `/stock-bot compare`。")
+                        if command == "index" and (len(symbols) != 1 or not symbols[0].startswith("^")):
+                            raise ValueError("請輸入一個指數名稱、別名或代碼，例如 `大盤`、`sp500` 或 `^GSPC`。")
                         if command == "compare" and len(symbols) < 2:
                             raise ValueError("請輸入至少兩個不同的標的，例如 `0050 2330`。")
                     if period is None:

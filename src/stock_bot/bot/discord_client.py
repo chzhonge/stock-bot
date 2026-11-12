@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import io
 import logging
+import re
 from contextlib import nullcontext
 from functools import partial
 
@@ -12,9 +13,18 @@ from discord.ext import tasks
 from stock_bot.charts import trend_color
 from stock_bot.history_display import COMPARISON_METHOD, history_change, history_heading
 from stock_bot.market.night import TAIWAN_TZ
+from stock_bot.market.quotes import INDEX_SYMBOL
 
 
 logger = logging.getLogger(__name__)
+
+INDEX_NAMES = {
+    "^TWII": "台灣加權指數",
+    "^GSPC": "S&P 500",
+    "^IXIC": "Nasdaq 綜合指數",
+    "^DJI": "道瓊工業平均指數",
+    "^SOX": "費城半導體指數",
+}
 
 
 def help_embed():
@@ -28,6 +38,9 @@ def help_embed():
             "**歷史走勢**\n"
             "`/stock-bot quote 代碼:AAPL 區間:2y` 或 `@機器人 AAPL 2y`\n"
             "查看單一標的的歷史走勢。\n\n"
+            "**指數走勢**\n"
+            "`/stock-bot index 指數:大盤 區間:6mo` 或 `@機器人 大盤 6mo`\n"
+            "可用名稱、別名或代碼搜尋，例如大盤、sp500、費半。\n\n"
             "**多檔比較**\n"
             "`/stock-bot compare 代碼:0050 2330 區間:6mo` 或 `@機器人 0050 2330 6mo`\n"
             "用空格分隔 2 至 5 個標的。省略區間時預設比較近 1 年。\n\n"
@@ -55,6 +68,41 @@ class StockCommands(app_commands.Group):
     @app_commands.describe(symbol="股票、ETF 或指數代碼，例如 0050", period="例如 6mo、2y 或 ytd，留空查盤中")
     async def quote(self, interaction: discord.Interaction, symbol: str, period: str | None = None):
         await self.bot.run_slash_query(interaction, "quote", symbol, period)
+
+    @app_commands.command(description="查詢單一指數的盤中或歷史走勢")
+    @app_commands.rename(symbol="指數", period="區間")
+    @app_commands.describe(symbol="搜尋指數名稱、別名或代碼", period="例如 6mo、2y 或 ytd，留空查盤中")
+    async def index(self, interaction: discord.Interaction, symbol: str, period: str | None = None):
+        await self.bot.run_slash_query(interaction, "index", symbol, period)
+
+    @index.autocomplete("symbol")
+    async def index_autocomplete(self, interaction: discord.Interaction, current: str):
+        aliases_by_code = {}
+        for alias, target in self.bot.service.aliases.items():
+            code = target.upper()
+            if re.fullmatch(INDEX_SYMBOL, code):
+                aliases_by_code.setdefault(code, []).append(alias)
+
+        query = current.strip().casefold()
+        choices = []
+        for code in dict.fromkeys((*INDEX_NAMES, *aliases_by_code)):
+            if code not in aliases_by_code:
+                continue
+            name = INDEX_NAMES.get(code, code)
+            aliases = aliases_by_code[code]
+            if not any(query in term.casefold() for term in (name, code, *aliases)):
+                continue
+            label = f"{name}（{code}）" if name != code else code
+            matching_alias = next(
+                (alias for alias in aliases if alias.casefold() != name.casefold() and query in alias.casefold()),
+                None,
+            )
+            if matching_alias:
+                label += f" · {matching_alias}"
+            choices.append(app_commands.Choice(name=label[:100], value=code))
+            if len(choices) == 25:
+                break
+        return choices
 
     @app_commands.command(description="比較 2 至 5 個標的的報酬率")
     @app_commands.rename(symbols="代碼", period="區間")
