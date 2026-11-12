@@ -16,8 +16,8 @@
    ```sh
    cd /path/to/projects/stock-bot
    sudo docker compose config --quiet &&
-   sudo docker compose pull stock-bot &&
-   sudo docker compose up -d stock-bot
+   sudo docker compose pull &&
+   sudo docker compose up -d
    sudo docker compose logs --tail 50 stock-bot
    ```
 
@@ -57,9 +57,17 @@ sudo docker compose logs --tail 50 wud
 | --- | --- |
 | 等待自動更新 | 已部署 WUD 時，預設每小時整點檢查。想換頻率，見[自訂 WUD 排程](#自訂-wud-排程)。 |
 | 立刻檢查並更新 | 已部署 WUD 時，在其目錄執行 `sudo sh ./check-and-update.sh`。有新映像就會重建 bot。 |
-| 用 Compose 手動更新 | 在 Docker 主機的 bot 目錄執行 `sudo docker compose pull stock-bot && sudo docker compose up -d stock-bot`。 |
+| 用 Compose 手動更新 | 在 Docker 主機的 bot 目錄執行 `sudo docker compose pull && sudo docker compose up -d`。 |
 | 查看日誌 | 在對應的部署目錄執行 `sudo docker compose logs --tail 50 stock-bot` 或 `sudo docker compose logs --tail 50 wud`。 |
 | 手動跑市場快報 | 在 Docker 主機的 bot 目錄執行 `sudo docker compose run --rm stock-bot python -m scripts.tw_market_report --config /app/config.toml`。 |
+
+### 三大法人日報排程
+
+`stock-bot-cron` 服務使用與 Bot 相同的映像，每週一至週五台灣時間 15:30 查詢證交所 BFI82U。部署時需使用含此排程的新映像及新版 Compose。用 `sudo docker compose logs --tail 50 stock-bot-cron` 查看結果。
+
+JSON 包含報表日期、狀態與各類法人及合計的買進、賣出、買賣差額，金額以新台幣元表示。休市或執行時當日資料尚未發布，會輸出 `no_data`。連線或解析失敗會記錄為排程錯誤。
+
+手動查詢當日資料時，執行 `sudo docker compose run --rm stock-bot-cron python -m scripts.tw_institutional_flows`。可附上 `--date YYYY-MM-DD` 查詢指定日期。
 
 ### 本機操作與設定
 

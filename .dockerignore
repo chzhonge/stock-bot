@@ -5,5 +5,8 @@
 !src/**
 !scripts/
 !scripts/**
+!deploy/
+!deploy/cron/
+!deploy/cron/crontab
 **/__pycache__/
 **/*.pyc

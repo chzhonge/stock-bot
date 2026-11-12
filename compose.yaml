@@ -10,10 +10,18 @@ services:
         bind:
           create_host_path: false
       - night-data:/app/data
-    labels:
+    labels: &image-update-labels
       wud.watch: "true"
       wud.watch.digest: "true"
       wud.trigger.include: dockercompose.dotpricebot
+
+  stock-bot-cron:
+    image: ghcr.io/chzhonge/stock-bot:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Taipei
+    command: ["supercronic", "-passthrough-logs", "/app/crontab"]
+    labels: *image-update-labels
 
 volumes:
   night-data:

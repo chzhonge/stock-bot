@@ -41,6 +41,9 @@ jobs:
         run: |
           docker run --rm --network none "${IMAGE}:${GITHUB_REF_NAME}" stock-chart-bot --help
           docker run --rm --network none "${IMAGE}:${GITHUB_REF_NAME}" python -m scripts.tw_market_report --help
+          docker run --rm --network none "${IMAGE}:${GITHUB_REF_NAME}" python -m scripts.tw_institutional_flows --help
+          docker run --rm --network none -e TZ=Asia/Taipei "${IMAGE}:${GITHUB_REF_NAME}" \
+            sh -ec 'test "$(date +%z)" = "+0800" && exec supercronic -passthrough-logs -test /app/crontab'
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
