@@ -63,11 +63,11 @@ sudo docker compose logs --tail 50 wud
 
 ### 三大法人日報排程
 
-`stock-bot-cron` 服務使用與 Bot 相同的映像，每週一至週五台灣時間 15:30 查詢證交所 BFI82U。部署時需使用含此排程的新映像及新版 Compose。用 `sudo docker compose logs --tail 50 stock-bot-cron` 查看結果。
+`stock-bot-cron` 服務使用與 Bot 相同的映像，每週一至週五台灣時間 15:30 查詢證交所 BFI82U。有資料時，透過 `config.toml` 的 `[report.discord].webhook_url` 發送至 Discord。部署時需使用含此排程的新映像及新版 Compose。用 `sudo docker compose logs --tail 50 stock-bot-cron` 查看結果。
 
 JSON 包含報表日期、狀態與各類法人及合計的買進、賣出、買賣差額，金額以新台幣元表示。休市或執行時當日資料尚未發布，會輸出 `no_data`。連線或解析失敗會記錄為排程錯誤。
 
-手動查詢當日資料時，執行 `sudo docker compose run --rm stock-bot-cron python -m scripts.tw_institutional_flows`。可附上 `--date YYYY-MM-DD` 查詢指定日期。
+手動查詢並發送當日資料時，執行 `sudo docker compose exec stock-bot-cron python -m scripts.tw_institutional_flows`。可附上 `--date YYYY-MM-DD` 查詢並發送指定日期。
 
 ### 本機操作與設定
 

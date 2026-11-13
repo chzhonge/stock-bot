@@ -20,6 +20,13 @@ services:
     restart: unless-stopped
     environment:
       TZ: Asia/Taipei
+    volumes:
+      - type: bind
+        source: ../stock-bot-private/config.toml
+        target: /app/config.toml
+        read_only: true
+        bind:
+          create_host_path: false
     command: ["supercronic", "-passthrough-logs", "/app/crontab"]
     labels: *image-update-labels
 
