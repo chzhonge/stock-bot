@@ -25,7 +25,7 @@ def build_report(day, rows, eligible_codes):
     buys = sorted((row for row in eligible if row[2] > 0), key=lambda row: (-row[2], row[0]))[:10]
     sells = sorted((row for row in eligible if row[2] < 0), key=lambda row: (row[2], row[0]))[:10]
     return {
-        "username": "股市小幫手",
+        "username": "日報-股市小幫手",
         "allowed_mentions": {"parse": []},
         "embeds": [{
             "title": f"上市外資買賣超排行（{day:%Y/%m/%d}）",

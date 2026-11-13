@@ -51,7 +51,7 @@ def build_report(day, rows, turnover):
         {"name": "法人成交比重（估算）", "value": ratio, "inline": False},
     ])
     return {
-        "username": "股市小幫手",
+        "username": "日報-股市小幫手",
         "allowed_mentions": {"parse": []},
         "embeds": [{
             "title": f"三大法人買賣超（{day:%Y/%m/%d}）",
