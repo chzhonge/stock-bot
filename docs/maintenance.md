@@ -73,9 +73,9 @@ Discord 以「日報-股市小幫手」發送卡片，顯示外資及陸資、�
 
 ### 上市外資買賣超排行
 
-`stock-bot-cron` 每週一至週五台灣時間 16:26 查詢證交所 TWT38U，透過同一個 Discord webhook 發送上市普通股與 ETF 的外資買超、賣超各前 10 名。排名採外資及陸資（不含外資自營商）的原始淨股數，卡片以張顯示。查無當日資料時跳過發送。
+`stock-bot-cron` 每週一至週五台灣時間 16:26 查詢證交所 TWT38U，透過同一個 Discord webhook 發送 TWT38U 全表的外資買超、賣超各前 10 名。排名採外資及陸資（不含外資自營商）的原始淨股數，卡片以張顯示。查無當日資料時跳過發送。
 
-手動執行 `sudo docker compose exec stock-bot-cron python -m scripts.tw_foreign_rankings`，或加上 `--date YYYY-MM-DD` 查詢並發送指定日期。補發時以查詢當下的上市證券名冊篩選標的。
+手動執行 `sudo docker compose exec stock-bot-cron python -m scripts.tw_foreign_rankings`，或加上 `--date YYYY-MM-DD` 查詢並發送指定日期。
 
 ### 本機操作與設定
 
