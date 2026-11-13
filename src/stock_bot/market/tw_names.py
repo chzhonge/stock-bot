@@ -15,11 +15,17 @@ RETRY_INTERVAL = 5 * 60
 SECURITY_NAME = re.compile(r"([0-9]{4,6}[A-Z]?)\s+(.+)")
 
 
-def parse_security_names(content):
+def parse_security_names(content, *, sections=None):
     # The Chinese ISIN pages use Big5 and separate codes with a full-width space.
     page = BeautifulSoup(content, "html.parser", from_encoding="big5")
     names = {}
+    section = None
     for cell in page.select("tr > td:first-child"):
+        if cell.has_attr("colspan"):
+            section = cell.get_text(strip=True)
+            continue
+        if sections is not None and section not in sections:
+            continue
         match = SECURITY_NAME.fullmatch(cell.get_text(" ", strip=True))
         if match:
             code, name = match.groups()
@@ -27,6 +33,15 @@ def parse_security_names(content):
     if not names:
         raise ValueError("證券名冊沒有可用的代碼與簡稱")
     return names
+
+
+def fetch_listed_stock_and_etf_codes():
+    try:
+        response = requests.get(CATALOG_URL, params={"strMode": MARKET_MODES["TW"]}, timeout=15)
+        response.raise_for_status()
+    except requests.RequestException:
+        raise RuntimeError("上市證券名冊查詢失敗") from None
+    return set(parse_security_names(response.content, sections={"股票", "創新板", "ETF"}))
 
 
 class TaiwanSecurityNames:

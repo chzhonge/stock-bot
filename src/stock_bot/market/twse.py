@@ -6,11 +6,63 @@ import requests
 
 URL = "https://www.twse.com.tw/rwd/zh/fund/BFI82U"
 TURNOVER_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK"
+FOREIGN_FLOWS_URL = "https://www.twse.com.tw/rwd/zh/fund/TWT38U"
 FIELDS = ("單位名稱", "買進金額", "賣出金額", "買賣差額")
 NO_DATA_STATUS = "很抱歉，沒有符合條件的資料"
 
 
 class TwseRepository:
+    def fetch_foreign_flows(self, day):
+        query_date = day.strftime("%Y%m%d")
+        try:
+            response = requests.get(FOREIGN_FLOWS_URL, params={"date": query_date, "response": "json"}, timeout=15)
+            response.raise_for_status()
+            payload = response.json()
+        except requests.RequestException:
+            raise RuntimeError("證交所外資買賣超查詢失敗") from None
+
+        if not isinstance(payload, dict):
+            raise ValueError("證交所外資買賣超格式異常")
+        status = payload.get("stat")
+        if isinstance(status, dict):
+            status = status.get("stat")
+        if isinstance(status, str) and status.strip().rstrip("!！。") in (
+            NO_DATA_STATUS, "查詢日期大於可查詢最大日期，請重新查詢",
+        ):
+            return None
+        if status != "OK":
+            raise ValueError("證交所外資買賣超狀態異常")
+        if payload.get("date") != query_date:
+            return None
+
+        fields, groups, data = (payload.get(key) for key in ("fields", "groups", "data"))
+        if not all(isinstance(value, list) for value in (fields, groups, data)):
+            raise ValueError("證交所外資買賣超缺少欄位或資料")
+        try:
+            code_index = fields.index("證券代號")
+            name_index = fields.index("證券名稱")
+            group = next(item for item in groups if item.get("title") == "外資及陸資(不含外資自營商)")
+            start = group["start"]
+            span = group["span"]
+            if not isinstance(start, int) or not isinstance(span, int):
+                raise ValueError
+            end = start + span
+            if not 0 <= start < end <= len(fields):
+                raise ValueError
+            net_index = fields.index("買賣超股數", start, end)
+        except (AttributeError, KeyError, StopIteration, TypeError, ValueError):
+            raise ValueError("證交所外資買賣超欄位不符") from None
+
+        rows = []
+        for row in data:
+            if not isinstance(row, list) or len(row) != len(fields):
+                raise ValueError("證交所外資買賣超資料列與欄位不符")
+            code = str(row[code_index]).strip()
+            name = str(row[name_index]).strip()
+            net_shares = int(str(row[net_index]).replace(",", ""))
+            rows.append((code, name, net_shares))
+        return rows or None
+
     def fetch_market_turnover(self, day):
         try:
             response = requests.get(

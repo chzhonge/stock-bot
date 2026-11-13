@@ -1,1 +1,2 @@
 30 15 * * 1-5 python -m scripts.tw_institutional_flows
+15 16 * * 1-5 python -m scripts.tw_foreign_rankings
