@@ -77,6 +77,16 @@ Discord 以「日報-股市小幫手」發送卡片，顯示外資及陸資、�
 
 手動執行 `sudo docker compose exec stock-bot-cron python -m scripts.tw_foreign_rankings`，或加上 `--date YYYY-MM-DD` 查詢並發送指定日期。
 
+### 上市融資融券日報
+
+`stock-bot-cron` 每週一至週五台灣時間 21:00 查詢證交所 MI_MARGN 信用交易總表。當日尚無資料或連線失敗時，每 15 分鐘重試，最多查詢 9 次，最後一次約在 23:00。休市也會依此重試，最終仍無資料則輸出 `no_data`，不發送；格式或日期異常會直接報錯，最後一次連線失敗也會以錯誤結束。部署需更新為含此排程的新映像。
+
+卡片沿用 `[report.discord].webhook_url`，顯示融資金額餘額與增減（億元）、融券餘額與增減（交易單位），並保留融資買進、賣出、現金償還及融券賣出、買進回補、現券償還。原始融資金額以仟元輸出，轉換為億元時除以 100,000。增減採同份報表的今日餘額減前日餘額；今日餘額仍可能於次一交易日調整，本排程不保存歷史資料或自動更正已送出的卡片。資料取得成功後只發送一次，Discord 發送失敗不自動重試，以免重複通知；手動重跑發送指令仍會再次發送。
+
+手動查詢並發送：`sudo docker compose exec stock-bot-cron python -m scripts.tw_margin_balances --date 2026-11-19`。省略 `--date` 時使用台灣當日日期；手動執行預設只查一次。
+
+只預覽資料與卡片、不發送 Discord：`uv run --locked python -m scripts.tw_margin_balances --date 2026-11-19 --dry-run`。此模式不讀取 webhook 設定，可安全用於測試。
+
 ### 本機操作與設定
 
 在本機安裝 uv，於 repo 根目錄放置 `config.toml`。先執行 `uv sync --locked` 安裝依賴，再依需要啟動 bot 或快報。

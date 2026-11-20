@@ -1,2 +1,3 @@
 31 15 * * 1-5 python -m scripts.tw_institutional_flows
 26 16 * * 1-5 python -m scripts.tw_foreign_rankings
+0 21 * * 1-5 python -m scripts.tw_margin_balances --attempts 9 --retry-interval 900

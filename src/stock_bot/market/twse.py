@@ -7,11 +7,88 @@ import requests
 URL = "https://www.twse.com.tw/rwd/zh/fund/BFI82U"
 TURNOVER_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK"
 FOREIGN_FLOWS_URL = "https://www.twse.com.tw/rwd/zh/fund/TWT38U"
+MARGIN_URL = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN"
+MARGIN_FIELDS = ("買進", "賣出", "現金(券)償還", "前日餘額", "今日餘額")
+MARGIN_ITEMS = {
+    "融資(交易單位)": "financing_units",
+    "融券(交易單位)": "short_units",
+    "融資金額(仟元)": "financing_amount",
+}
 FIELDS = ("單位名稱", "買進金額", "賣出金額", "買賣差額")
 NO_DATA_STATUS = "很抱歉，沒有符合條件的資料"
 
 
 class TwseRepository:
+    def fetch_margin_balances(self, day):
+        query_date = day.strftime("%Y%m%d")
+        try:
+            response = requests.get(
+                MARGIN_URL,
+                params={"date": query_date, "selectType": "MS", "response": "json"},
+                timeout=15,
+            )
+            response.raise_for_status()
+        except requests.RequestException:
+            raise RuntimeError("證交所融資融券查詢失敗") from None
+        try:
+            payload = response.json()
+        except ValueError:
+            raise ValueError("證交所融資融券回應不是有效 JSON") from None
+
+        if not isinstance(payload, dict):
+            raise ValueError("證交所融資融券格式異常")
+        status = payload.get("stat")
+        if isinstance(status, dict):
+            status = status.get("stat")
+        if isinstance(status, str) and status.strip().rstrip("!！。") in (
+            NO_DATA_STATUS, "查詢日期大於可查詢最大日期，請重新查詢",
+        ):
+            return None
+        if status != "OK":
+            raise ValueError("證交所融資融券狀態異常")
+        if payload.get("date") != query_date:
+            raise ValueError("證交所融資融券報表日期不符")
+
+        tables = payload.get("tables")
+        if not isinstance(tables, list):
+            raise ValueError("證交所融資融券缺少統計表")
+        candidates = [
+            table for table in tables
+            if isinstance(table, dict) and "信用交易統計" in str(table.get("title", ""))
+        ]
+        if len(candidates) != 1:
+            raise ValueError("證交所融資融券統計表不符")
+        table = candidates[0]
+        fields, data = table.get("fields"), table.get("data")
+        if not isinstance(fields, list) or any(fields.count(field) != 1 for field in ("項目", *MARGIN_FIELDS)):
+            raise ValueError("證交所融資融券欄位不符")
+        if not isinstance(data, list) or not data:
+            raise ValueError("證交所融資融券缺少資料列")
+
+        rows = {}
+        for values in data:
+            if not isinstance(values, list) or len(values) != len(fields):
+                raise ValueError("證交所融資融券資料列與欄位不符")
+            row = dict(zip(fields, values))
+            item = row["項目"]
+            if not isinstance(item, str):
+                raise ValueError("證交所融資融券項目異常")
+            key = MARGIN_ITEMS.get(item.strip())
+            if key is None:
+                continue
+            if key in rows:
+                raise ValueError("證交所融資融券項目重複")
+            parsed = {}
+            for field in MARGIN_FIELDS:
+                value = str(row[field]).strip().replace(",", "")
+                if not re.fullmatch(r"[0-9]+", value):
+                    raise ValueError("證交所融資融券數值異常")
+                parsed[field] = int(value)
+            rows[key] = parsed
+        if set(rows) != set(MARGIN_ITEMS.values()):
+            raise ValueError("證交所融資融券缺少必要項目")
+        return rows
+
     def fetch_foreign_flows(self, day):
         query_date = day.strftime("%Y%m%d")
         try:
